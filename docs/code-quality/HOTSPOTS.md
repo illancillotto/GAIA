@@ -1,5 +1,30 @@
 # Hotspot backlog
 
+## 2026-11-17 — Fallback intenti Wiki
+
+- `classify_intent` in `wiki/services/intent_classifier.py`: `reduced`,
+  cognitive/cyclomatic/LOC `15/13/16 -> 11/10/14`, Warning `2 -> 1`.
+  Nessun helper o nuova violation; resta cyclomatic 10 per soglia inclusiva.
+  101 test prima/dopo full-file 100%, 10.000 differenziali equivalenti.
+  Evidenze in `WIKI_INTENT_FALLBACK_2026-11-17.md`.
+
+## 2026-11-17 — Finestre notturne autosync
+
+- `window_context` in `elaborazioni/autosync_windows.py`: `blocked` per la
+  slice con guardia anticipata. Cognitive 15 -> 13, ma LOC 14 -> 15 rifiutato
+  dal ratchet; runtime ripristinato identico, Warning invariato. `NO_SAFE_CHANGE`.
+- Consegnati solo 28 test aggiuntivi, suite 66 PASS full-file 100%; nessuna
+  riduzione conteggiata. Rapporto `AUTOSYNC_WINDOWS_2026-11-17.md`.
+
+## 2026-11-17 — Punteggio ricerca operativa
+
+- `_score` in `search/service.py`: `closed`, cognitive/cyclomatic/nesting
+  `28/12/5 -> 3/4/1`. Helper singolo valore `9/9/1` sotto tutte le soglie;
+  cognitiva file `59 -> 43`, Error `4 -> 2`, Warning `1 -> 0`.
+  62 test prima/dopo full-file 100%, 10.000 differenziali equivalenti.
+- Debito residuo fuori slice: `_search_utenze` LOC 101 e `_search_catasto`
+  LOC 168. Nessun secondo hotspot aperto. Evidenze in `SEARCH_SCORING_2026-11-17.md`.
+
 Questo elenco non e una coda automatica di refactoring. Il quality ratchet opera
 prima sul codice realmente toccato dagli sviluppi; un hotspot di questa lista si
 apre solo quando ostacola feature, test o manutenzione e dopo una decisione
@@ -13,6 +38,39 @@ Snapshot di preparazione: `main` a
 `79794c89e42e381a01d5dbbab36fa3a7abbde98d`, 2026-08-17.
 
 ## Candidati iniziali
+
+Network catena discovery, 2026-11-17: `discover_hosts` `IMPROVED`,
+cognitive/cyclomatic/LOC `14/12/27 -> 10/10/22`, fallback Scapy/locale
+condiviso senza helper. Il Warning cyclomatic resta (soglia inclusiva10):
+nessuna nuova riduzione di finding. File cog `618 -> 614`, cyc `472 -> 470`,
+LOC `1.446 -> 1.441`; nessun debito trasferito. 1.290 test Network PASS,
+services.py full-file statement/branch100%, 4.000 differenziali/provaAST,
+tre mutanti respinti, lint/ratchet scoped PASS. `NETWORK_DISCOVERY_CHAIN_2026-11-17.md`.
+
+Network OS da porte, 2026-11-17: `_guess_operating_system` `IMPROVED`,
+cognitive/cyclomatic/LOC `11/10/13 -> 9/8/11`, un Warning eliminato senza
+helper. File cog `620 -> 618`, cyclomatic `474 -> 472`, LOC `1.448 -> 1.446`;
+Error 17 invariati, Warning `11 -> 10`. 1.248 test Network prima/dopo PASS,
+services.py full-file statement/branch 100%, 10.000 differenziali equivalenti,
+quattro mutanti respinti, lint e ratchet scoped PASS. Target sotto soglia;
+altri finding legacy services.py restano. `NETWORK_OS_PORTS_2026-11-17.md`.
+
+Network parser Syslog, 2026-11-17: `parse_sophos_syslog_message` `IMPROVED`,
+cognitive/cyclomatic/LOC/nesting `14/7/11/4 -> 1/2/5/1`, helper unquote
+`7/6/7/2` sotto soglia; Warning nesting rimosso. File cog `121 -> 115`,
+decisioni 85 invariate, Error 5 invariati, Warning `4 -> 3`. 1.168 test Network
+PASS, sophos.py full-file statement/branch 100% senza esclusioni; 10.000
+differenziali equivalenti, quattro mutanti respinti, lint/ratchet scoped PASS.
+Altri Error legacy persistono. `NETWORK_SYSLOG_VALUES_2026-11-17.md`.
+
+Network diff snapshot, 2026-11-17: `_build_diff` `IMPROVED`,
+cognitive/cyclomatic `22/14 -> 9/7`, Warning `2 -> 0`, nessun helper.
+File cognitive `633 -> 620`, cyclomatic `481 -> 474`, callable 68 e LOC
+1.448 invariati; decisioni `413 -> 406`, nessun debito trasferito.
+1.146 test Network prima/dopo PASS, services.py statement/branch 100%,
+4.000 differenziali equivalenti, lint e ratchet scoped PASS. Target sotto
+tutte le soglie; altri finding services.py residui. Evidenze in
+`NETWORK_SCAN_DIFF_2026-11-17.md`; nessuna seconda slice avviata.
 
 Ripresa singolo hotspot, dossier ZIP Riordino, 2026-10-07:
 `backend/app/modules/riordino/services/export_service.py` /
@@ -577,6 +635,139 @@ Audit baseline globale e ordine delle tranche:
 | reorganized | `frontend/src/types/api.ts` | `0` callable; facciata di 8 righe su 7 barrel dominio, tutti i file sotto soglia | `REORGANIZED_AND_CHARACTERIZED`; nessun runtime o contratto pubblico modificato |
 | reorganized | `frontend/src/lib/api.ts` | facciata su 15 moduli; cognitive sum/max `545/54`, cyclomatic sum/max `851/30` | `REORGANIZED_AND_CHARACTERIZED`; 450 export preservati, coverage completa, warning file-level residuo in `network.ts` |
 | reorganized | `backend/app/modules/utenze/router.py` | facade package + route modules; cognitive sum/max `409/39`, cyclomatic sum/max `403/28` | `REORGANIZED_AND_CHARACTERIZED`; OpenAPI identica, coverage 100%, warning LOC residuo in `routes/support.py` |
+
+## 2026-11-17 — Meta refresh HTTP Network
+
+- `_resolve_http_metadata` `IMPROVED`: cognitive/cyclomatic/LOC/nesting
+  `44/20/57/5→28/15/45/3`; helper follow `5/4/9/2`, quattro parametri, zero
+  violation. File cognitiva 644→633, decisioni 415→413, LOC 1.451→1.448,
+  Error 18→17 e Warning 14→13. Nessun debito trasferito.
+- 1.131 test prima/dopo, full-file statement/branch 100% con dieci righe
+  import opzionali legacy gia escluse e invariate; 4.000 differenziali, sei
+  mutanti respinti. URL/ordine/cleanup/fallback/stato parziale preservati.
+  Ratchet scoped/lint PASS; globale resta exit 2 sul delta Tributi estraneo.
+- Residuo nel target cognitive28/cyclomatic15 Error, file LOC legacy e altri
+  finding services non affrontati. Dettagli `NETWORK_HTTP_REFRESH_2026-11-17.md`.
+
+## 2026-11-17 — Cronologia scansioni condivisa Network
+
+- Quattro mapping identici condividono `_serialize_scan_history`, helper
+  `1/2/13/0`, un parametro, zero violation. `IMPROVED`: device serializer LOC
+  55→44, cognitiva aggregata tre file 373→364 (owner disgiunti 336→330),
+  decisioni 250→246 (disgiunti 227→224), LOC 1.029→1.005; Error 9→8,
+  Warning 5 invariati. Nessun debito trasferito al mapper.
+- 1.104 test prima/dopo, tre runtime full-file statement/branch 100%, 4.000
+  differenziali e sei mutanti respinti. Espansione helper ricostruisce AST
+  originali; ordine, query, fallback e riferimenti preservati. Ratchet scoped
+  e lint PASS; globale resta exit 2 sul delta Tributi estraneo, baseline intatta.
+- Residui: inference principale `103/60/264/4`, ensure_candidate
+  `34/23/110/2`, inferred ARP `25/14/87/3`; non affrontati oltre la deduplica.
+  Dettagli `NETWORK_SCAN_HISTORY_2026-11-17.md`.
+
+## 2026-11-17 — Lock del job telemetry Network
+
+- `_run_job_wrapper` `IMPROVED`: cognitive/cyclomatic/LOC/nesting
+  `20/10/42/3→14/8/30/3`; helper acquire `1/2/7/1`, release `1/2/9/1`,
+  tutti sotto soglia. File cognitiva 22→18, decisioni 11 invariate, Warning
+  2→0, Error 0 invariati; nessun debito trasferito.
+- 59 test prima/dopo, full-file statement/branch 100%, 4.000 confronti
+  differenziali e sei mutanti respinti. Ordine SQL/lock/cleanup, skip concorrente,
+  eccezioni e cancellazioni preservati; wrapper AST identico espandendo helper.
+  Ratchet scoped/lint PASS; baseline e altri WIP preservati.
+- Nessun hotspot residuo nel file. Dettagli
+  `NETWORK_TELEMETRY_LOCK_2026-11-17.md`; nessuna slice adiacente avviata.
+
+## 2026-11-17 — Creazione soggetti tracciati Network
+
+- `create_tracked_subject` `IMPROVED`: cognitive/cyclomatic/LOC/nesting
+  `48/29/72/3→13/13/42/2`. Target resolver `6/5/18/2`, reactivation `9/8/18/1`,
+  entrambi sotto soglia. File cognitiva 82→62, decisioni 58→53, Error 3→1,
+  Warning 3 invariati; nessun debito trasferito agli helper.
+- 120 test prima/dopo, full-file statement/branch 100%, 4.000 confronti
+  differenziali e sei mutanti respinti. Due commit legacy, ordine ORM/SQL,
+  campi omessi/vuoti, autore e errori preservati. Ratchet scoped e lint PASS;
+  globale resta exit 2 sul delta Tributi estraneo; baseline e report intatti.
+- Residui tracking routes: parametri get_tracked_subjects Error, LOC lista
+  e cyclomatic creazione Warning, parametri attivita Warning. Non affrontati.
+  Dettagli `NETWORK_TRACKING_CREATION_2026-11-17.md`.
+
+## 2026-11-17 — Riepilogo VPN bypass Network
+
+- `get_vpn_bypass_summary` in router/routes/tracking.py: `closed`, `IMPROVED`,
+  cognitive/cyclomatic/LOC/nesting `26/21/86/2 → 1/2/36/1`. Helper accumulo
+  `7/8/15/1`, collector alert `2/3/36/0`, SELECT comune `2/3/7/0`, tutti
+  sotto soglia. File cognitiva 96→82 e decisioni 66→58, Error 6→3,
+  Warning 3 invariati; nessuna violation trasferita.
+- 88 test prima/dopo, full-file statement/branch 100%, 4.000 confronti
+  equivalenti e sei mutanti respinti. Query SQL/parametri, ordine delle sei
+  letture, getter/categorie/fallback/risposta preservati. Ratchet scoped PASS,
+  globale exit 2 per ambiguita Tributi preesistente. Residui: create tracking,
+  parametri e LOC lista; nessun altro hotspot avviato.
+  Dettagli in `NETWORK_VPN_SUMMARY_2026-11-17.md`.
+
+## 2026-11-17 — Policy ingestione listener Syslog Network
+
+- `SophosSyslogListener.handle_message`: `closed`, `IMPROVED`, cognitive/
+  cyclomatic/LOC/nesting `16/10/22/2 → 7/5/9/2`, metodo policy/ingest
+  `6/6/15/1` con quattro parametri sotto soglia. File cognitiva 51→48,
+  decisioni 36 invariate, Warning 3→1; nessuna violation trasferita.
+- 61 test prima/dopo, full-file statement/branch 100%, 5.000 confronti
+  equivalenti e sei mutanti respinti. Sessione prima del try, policy,
+  log/rollback/close, errori, worker e UDP preservati. Fix import Callable
+  richiesto da Ruff, test/differenziale ripetuti sui byte finali.
+  Residuo: Warning sui sei parametri del costruttore. Nessun altro hotspot
+  iniziato. Dettagli in `NETWORK_SYSLOG_POLICY_2026-11-17.md`.
+
+## 2026-11-17 — Batch registrazione metriche SNMP Network
+
+- `poll_sophos_firewall_metrics`: `NO_SAFE_CHANGE`, consegna `TEST_ONLY`.
+  Runtime `12/11/40/2` invariato. Candidato esterno polling `9/9/23/1`, helper
+  `3/3/26/2` con cinque parametri: un nuovo Warning sostituirebbe quello
+  ciclomatico, senza ridurre cognitiva 70 o decisioni 53 del file. Respinto
+  prima di applicarlo; nessuna riduzione contabilizzata.
+- 16 nuovi test, 164 PASS complessivi, runtime full-file statement/branch 100%,
+  cinque mutanti in memoria respinti. Restano Warning ciclomatico polling ed
+  Error parametri record_firewall_metric. Nessun altro hotspot iniziato.
+  Dettagli in `NETWORK_SNMP_RECORDING_2026-11-17.md`.
+
+## 2026-11-17 — Validazione assegnatario patch dispositivi Network
+
+- `patch_device` in router/routes/devices.py: `closed`, `IMPROVED` sulla
+  ciclomatica; cognitive/cyclomatic/LOC/nesting `14/11/33/2 → 8/7/30/2`,
+  validatore `6/5/5/2` sotto soglia. Warning 1→0, Error 1 invariato;
+  cognitiva file 32 e decisioni 26 invariate. 118 test prima/dopo, full-file
+  statement/branch 100%, 4.000 scenari equivalenti e cinque mutanti respinti.
+  Ratchet mirato PASS; globale exit 2 per ambiguita Tributi preesistente.
+  Residuo file: parametri get_devices. Nessun'altra slice avviata.
+  Dettagli in `NETWORK_DEVICE_ASSIGNEE_2026-11-17.md`.
+
+## 2026-11-17 — Applicazione campi bulk dispositivi Network
+
+- `bulk_update_devices` in router/routes/devices.py: `closed`, cognitive/
+  cyclomatic/LOC/nesting18/12/28/2→5/6/23/1, helper8/7/9/1 sotto soglia.
+  Warning3→1, Error1 invariato; cognitiva file37→32, decisioni26 invariate.
+  92test prima/dopo, full-file100%,8000scenari equivalenti e cinque mutanti
+  respinti. Residui: parametri get_devices e Warning ciclomatico patch_device.
+  Dettagli in `NETWORK_DEVICE_BULK_2026-11-17.md`.
+
+## 2026-11-17 — Decodifica risposta SNMP Network
+
+- `_snmp_get_values_async` in sophos_snmp.py: `closed`, cognitive/cyclomatic/
+  LOC/nesting13/11/20/2→9/8/14/1, decoder4/4/8/2 sotto soglia. Warning2→1,
+  Error1 invariato; cognitiva70 e decisioni53 invariate. 148test prima/dopo,
+  full-file100%,12000scenari equivalenti e cinque mutanti respinti.
+  Residui: nove parametri record metric e ciclomatica11 del polling.
+  Dettagli in `NETWORK_SNMP_RESPONSE_2026-11-17.md`.
+
+## 2026-11-17 — Statistiche riepilogo attivita Network
+
+- `_build_tracked_subject_activity_summary`: `reduced`, cognitive/cyclomatic/
+  LOC/nesting48/25/121/3→11/6/61/2. Query e accumulatore `activity_stats.py`
+  tutti sotto soglia. Error3→0, Warning0→1(LOC): netto due violation eliminate,
+  Warning residuo dichiarato. Aggregati cognitiva168→159, decisioni115 invariate.
+  261test prima/dopo, full-file100% sui due runtime,8000scenari equivalenti e
+  cinque mutanti respinti. Restano61LOC nel builder; nessun Error in tracking
+  o stats. Dettagli in `NETWORK_ACTIVITY_STATS_2026-11-17.md`.
 
 ## 2026-11-17 — Contatori traffico attivita soggetti Network
 

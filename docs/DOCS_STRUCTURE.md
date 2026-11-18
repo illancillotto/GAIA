@@ -76,6 +76,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `backend/app/modules/utenze/router/` e `backend/app/modules/utenze/routes/`: facade FastAPI compatibile e route Utenze separate per responsabilita.
 - `backend/app/modules/network/router/`: facade FastAPI Network, route HTTP e helper di correlazione/serializzazione separati per responsabilita.
 - `backend/app/modules/network/router/helpers/arp_timeline.py`: proiezione dei gruppi di osservazioni ARP e analisi temporale; `tracking.py` conserva query, raggruppamento e ranking della timeline.
+- `backend/app/modules/network/router/helpers/activity_stats.py`: statistiche per singolo riepilogo attivita, contatori indipendenti e composizione della risposta; `tracking.py` conserva matching, dettagli e selezione SQL.
 - `backend/app/modules/operazioni/routes/_driver_mismatch.py`: query, selezione temporale e mapping delle anomalie guidatore; `analytics.py` conserva gli input ORM fino alla risposta per preservare il lifetime originale.
 - `backend/app/modules/presenze/router/`: facade FastAPI Presenze, route di dominio e helper per scheduling, giornaliere, recovery, banca ore, sync ed export.
 - `backend/app/modules/me/router/`: facade FastAPI self-service, helper comuni e route separate per stato/Presenze, riepilogo, Operazioni e asset.
@@ -361,6 +362,7 @@ GAIA/
 │   │   ├── db/
 │   │   ├── jobs/
 │   │   ├── models/
+│   │   │   └── spatial_types.py  # Tipi geometrici Catasto per PostgreSQL/PostGIS e SQLite
 │   │   ├── modules/
 │   │   │   ├── accessi/
 │   │   │   ├── catasto/

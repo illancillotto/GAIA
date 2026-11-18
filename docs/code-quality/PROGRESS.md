@@ -1,5 +1,811 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-11-17 — Fallback intenti Wiki
+
+- Turno precedente `PROGRESS` per caratterizzazione e candidato autosync
+  rifiutato. Unico hotspot attuale `classify_intent` in
+  `wiki/services/intent_classifier.py`, HEAD `743b21c1`; WIP precedenti
+  verificati via hash e file target libero. Graphify Wiki sui chiamanti
+  question_router/orchestrator consultato prima della modifica.
+- `IMPROVED`: cognitive/cyclomatic/LOC `15/13/16 -> 11/10/14`, due Warning
+  diventano uno. Rimossi solo live_score>0 implicato da live_score>docs_score
+  e l'ultimo if docs_score>0 che restituisce lo stesso valore del fallback.
+- Prova: tutti i punteggi sono somme di unita, quindi interi non negativi.
+  Priorita overview/logic/live/docs, tie, bonus identificatori, ordine regex,
+  normalizzazioni e propagazione errori invariati. Nessun helper o pattern
+  cambiato, nessun aumento PRIMARY; nesting 1, parametri 1, callable 1 invariati.
+- File cognitiva `15 -> 11`, cyclomatic `13 -> 10`, decisioni `12 -> 9`,
+  LOC `130 -> 128`. Error 0 invariati, Warning `2 -> 1`; resta cyclomatic 10,
+  soglia inclusiva. Nessuna nuova violation o debito trasferito.
+- 101 test PASS prima/dopo, inclusi 23 nuovi e quattro API chat selezionate,
+  router e orchestrator. Full-file 100% statement/branch: `25/25 e 10/10 ->
+  23/23 e 8/8`, zero esclusioni/missing/partial/failure/error/skip.
+- 10.000 differenziali equivalenti per risultati, trace delle regex e
+  normalizzazioni, errori iniettati. AST prefisso, costanti/pattern/import e
+  return conservati; tre mutanti in memoria respinti: tie live 1.423 casi,
+  priorita logic rimossa 2.157, fallback live 1.897.
+- Prima verifica Ruff/lint FAIL per RUF001 gia presente nell'apostrofo
+  tipografico del pattern italiano. Aggiunta motivazione puntuale RUF001 per
+  conservare il pattern identico, nessun ignore largo o cambio regex.
+  Ruff runtime/test, format test nuovo, lint-backend finale 272 file e
+  diff-check PASS. Primo log fallito conservato, non dichiarato PASS.
+- Ratchet scoped origin/main prima/dopo PASS, merge-base `686e529e`;
+  globale exit 2 soltanto per ambiguous_identity Tributi useEffect[0]<callback>,
+  dieci candidati preesistenti. Baseline/eccezioni/matcher/report condivisi
+  intatti; nessun sync/verify baseline o PASS globale dichiarato.
+- Snapshot completo 1.963 file e 22.649 callable invariati, Error 1.888
+  invariati, Warning `2.939 -> 2.938`; zero parse/exception error e solo
+  intent_classifier.py cambia nelle metriche. Graphify Wiki AST 125/125,
+  1.051 nodi/2.447 archi; passaggio finale solo commento senza cambi topologia.
+- Evidenze `WIKI_INTENT_FALLBACK_2026-11-17.md`, artefatti
+  `/tmp/gaia-wiki-intent-refactor-20261117/`; Graphify platform docs e hash
+  finali nel checkpoint. Dalla ripresa 35 slice migliorative, -30 Error,
+  -35 Warning e -246 cognitiva aggregata tool. Singola slice conclusa.
+- Peer Communications informato della slice e dei WIP Network/Search/Wiki;
+  sta preparando audit main e deve usare checkout dedicato per preservarli.
+  Nessun cambio HEAD/branch, commit/push/merge/deploy da questo thread.
+  Prossima continuazione: riallineare ownership prima di una nuova slice;
+  programma generale ancora aperto.
+
+## 2026-11-17 — Finestre notturne autosync: NO_SAFE_CHANGE
+
+- Turno precedente `PROGRESS`. Unico hotspot `window_context` in
+  `elaborazioni/autosync_windows.py`, HEAD `743b21c1`; hash WIP precedenti
+  verificati, nessuna modifica concorrente nel file. Orientamento Graphify
+  backend sui chiamanti scheduler completato.
+- Prima e finale cognitive/cyclomatic/LOC/nesting `15/8/14/3`, un Warning
+  cognitive. Candidato con guardia anticipata sui diurni non corrispondenti:
+  `13/8/15/2`, senza helper o nuove decisioni. Ratchet scoped exit 1 per
+  `legacy_metric_regression`, LOC 14 -> 15. Candidato scartato, runtime
+  ripristinato byte per byte; nessuna compressione artificiale per aggirare il gate.
+- Invarianti: intervalli ordinati, prima corrispondenza, start incluso/end
+  escluso, start=end sempre attivo, data ciclo precedente dopo mezzanotte,
+  parsing e propagazione errori invariati. Aggiunti 28 test; suite con i test
+  esistenti: 66 PASS prima, sul candidato e dopo il ripristino. Coverage
+  full-file originale/finale 15/15 statement e 10/10 branch, 100%, nessuna
+  esclusione/missing/partial. Candidato 16/16 e 10/10, anch'esso 100%.
+- 10.032 differenziali original/candidato equivalenti; prefisso, primo match,
+  azioni notturne e return finale con AST invariato. Tre mutanti in memoria
+  respinti da 3.949/467/1.656 casi. Evidenze riferite al candidato rifiutato,
+  non a una riduzione runtime ammessa. Script riproducibile sullo snapshot congelato.
+- Finale: ratchet scoped PASS, Ruff/format nuovo test, lint-backend 270 file
+  e diff-check PASS. Graphify backend dopo ripristino: AST 1.073/1.073,
+  topologia invariata. Ratchet globale e Graphify platform docs nel checkpoint
+  finale. Baseline/eccezioni/matcher/report condivisi e altri WIP intatti.
+- Metriche globali finali invariate: 1.963 file, 22.649 callable, 1.888 Error,
+  2.939 Warning. Nessuna riduzione conteggiata: restano 34 slice migliorative,
+  -30 Error, -34 Warning e -242 cognitiva aggregata tool dalla ripresa.
+- `NO_SAFE_CHANGE` runtime e `TEST_ONLY` consegnato. Rapporto
+  `AUTOSYNC_WINDOWS_2026-11-17.md`; artefatti
+  `/tmp/gaia-autosync-windows-refactor-20261117/`. Nessun secondo hotspot,
+  commit/push/merge/deploy; programma generale ancora aperto. Prossima
+  continuazione: selezionare un hotspot diverso con ownership libera.
+
+## 2026-11-17 — Punteggio ricerca operativa
+
+- Unico hotspot `_score` in `backend/app/modules/search/service.py`, HEAD
+  `743b21c1`; ownership Search libera confermata dal peer Communications.
+- `IMPROVED`: `_score` cognitive/cyclomatic/LOC/nesting `28/12/16/5 ->
+  3/4/6/1`; `_score_value` `9/9/13/1`, nessuna violation nuova. Due Error
+  e un Warning eliminati. Separati punteggio del singolo valore e massimo,
+  senza cambiare query SQL, ordinamento, autorizzazioni o risultati API.
+- Invarianti: query.lower prima dell'iterazione, normalizzazione dei valori,
+  precedenza exact/prefix/substring/tokens, fallback 40, consumo completo
+  anche dopo score 100 e propagazione errori. `max(best, 0)` nei casi senza
+  match conserva l'intero non negativo accumulato; nessun ritorno anticipato.
+- 62 test PASS prima/dopo, di cui 55 nuovi; API esistenti invariate. Servizio
+  full-file 100% statement/branch: `104/104 e 38/38 -> 107/107 e 38/38`,
+  zero esclusioni, missing, partial, failure, error o skip.
+- 10.000 differenziali equivalenti inclusi trace normalizzazione/confronti,
+  iteratori ed errori. Tre mutanti solo in memoria respinti: exact abbassato
+  (389 divergenze), any al posto di all (1.127), ritorno anticipato (659).
+  Altre 11 funzioni, import e stato modulo con AST identico.
+- File cognitive `59 -> 43`, cyclomatic `49 -> 50`, callable `12 -> 13`:
+  decisioni aggregate `37 -> 37`. LOC `376 -> 383` include wrapping import
+  richiesto da Ruff; nessun debito trasferito. Error `4 -> 2`, Warning `1 -> 0`;
+  restano solo LOC di `_search_utenze` (101) e `_search_catasto` (168).
+- Ruff runtime/test, format nuovo test, lint-backend (269 file) e diff-check
+  PASS. Ratchet scoped origin/main prima/dopo PASS, merge-base `686e529e`.
+  Globale exit 2 soltanto per ambiguous_identity Tributi useEffect[0]<callback>,
+  dieci candidati preesistenti. Baseline/eccezioni/matcher/report condivisi
+  intatti: nessun sync baseline, baseline-verify o PASS globale dichiarato.
+- Snapshot completo 1.963 file, callable `22.648 -> 22.649`, Error
+  `1.890 -> 1.888`, Warning `2.940 -> 2.939`; zero parse/exception error.
+  Solo Search cambia nelle metriche; hash altri WIP e runtime precedenti
+  verificati invariati. Graphify backend: AST 1.073/1.073, 11.640 nodi,
+  28.908 archi; HTML omesso automaticamente per dimensione del grafo.
+- Evidenze in `SEARCH_SCORING_2026-11-17.md`, artefatti isolati in
+  `/tmp/gaia-search-score-refactor-20261117/`. Graphify platform docs e hash
+  finali registrati nel checkpoint finale. Nessun commit/push/merge/deploy.
+- Dalla ripresa 34 slice migliorative: -30 Error, -34 Warning, -242 cognitiva
+  aggregata tool. Singola slice conclusa, programma generale ancora aperto;
+  prossima azione review e selezione di un altro hotspot alla continuazione.
+
+## 2026-11-17 — Catena fallback discovery Network
+
+- Turno precedente progresso. Singolo hotspot `discover_hosts` in services.py,
+  HEAD `743b21c1`; runtime precedenti e altri WIP preservati. Graphify query
+  sui chiamanti e sulle sonde prima della modifica.
+- Prima cognitive/cyclomatic/LOC `14/12/27`, un Warning cyclomatic.
+  Candidato `10/10/22`: selezione della prima sonda ARP/ordinaria distinta,
+  tratto successivo Scapy/fallback locale condiviso. Nessun helper nuovo.
+  Il Warning resta perche la soglia inclusiva e 10: non dichiararlo eliminato.
+- Invarianti: risoluzione default e validazione prima delle sonde, ARP solo
+  per scan_type="arp", ordine chiamate, argomenti, identita dei risultati,
+  singola valutazione truthiness per risultato e propagazione errori.
+- `IMPROVED`: file cognitiva `618 -> 614`, cyclomatic `472 -> 470`,
+  decisioni `404 -> 402`, callable 68 invariati, LOC `1.446 -> 1.441`.
+  Error 17 e Warning 10 invariati; nessun trasferimento o nuova violation.
+  Riduzione di complessita e duplicazione, non di finding in questa slice.
+- Prima/dopo 1.290 test Network PASS, 42 nuovi, zero failure/error/skip.
+  Full-file services.py statement/branch 100%: prima 802/802 e 282/282,
+  dopo 796/796 e 278/278. Zero missing/partial; dieci righe legacy degli
+  import opzionali escluse restano identiche, nessuna nuova esclusione.
+- 4.000 differenziali equivalenti per identita risultato, default/validazione,
+  chiamate/argomenti, truthiness/errori/cause. Prova AST: i due suffissi
+  originali identici diventano un solo suffisso invariato; prefisso e prime
+  sonde invariati. Altre 67 funzioni/import/stato modulo con AST identico.
+- Tre mutanti in memoria respinti: selettore ARP invertito 35 failure,
+  presenza al posto truthiness 38, Scapy saltato 24; zero error/skip.
+  Ruff runtime/test, format nuovo test, lint-backend e diff-check PASS.
+- Ratchet scoped origin/main prima/dopo PASS, merge-base `686e529e`;
+  globale exit 2 solo ambiguous_identity Tributi useEffect[0]<callback>,
+  dieci candidati preesistenti. Nessun PASS globale o sync/verify baseline.
+- Report completi isolati 1.963 file, 22.648 callable, Error 1.890 e Warning
+  2.940 invariati. Solo services.py cambia, zero parse/exception error.
+  Hash altri WIP/runtime precedenti, baseline/eccezioni/matcher/report
+  condivisi verificati invariati; finale runtime identico al candidato.
+- Graphify Network Make 496 nodi/1.240 archi; platform docs e verifica chunk/
+  warning nel checkpoint finale. Rapporto `NETWORK_DISCOVERY_CHAIN_2026-11-17.md`,
+  artefatti `/tmp/gaia-network-discovery-chain-refactor-20261117/`.
+- Dalla ripresa 33 slice migliorative: -28 Error, -33 Warning e -226 cognitiva
+  aggregata tool. Singola slice conclusa, nessun commit/push/merge/deploy;
+  goal generale attivo. Prossima azione review e selezione alla continuazione.
+
+## 2026-11-17 — Classificazione OS da porte Network
+
+- Turno precedente progresso. Unica slice runtime prevista:
+  `_guess_operating_system` in services.py, HEAD `743b21c1`; altri WIP,
+  baseline e slice precedenti preservati. Graphify usato per impact analysis.
+- Prima cognitive/cyclomatic/LOC/nesting `11/10/13/1`, un Warning cyclomatic;
+  file cognitive 620, cyclomatic 474, decisioni 406, callable 68, LOC 1.448.
+  Raggruppare i due casi porta 445 sotto un solo controllo; priorita RDP,
+  combinazione SMB+SSH, SMB, SSH, HTTP/HTTPS e fallback invariati.
+- `set(open_ports)` resta prima di ogni decisione: consumo completo,
+  duplicati, iteratori ed errori di materializzazione invariati. Il set locale
+  di porte non cambia durante la classificazione; il secondo controllo 445
+  era ridondante. Nessun helper o modifica ai chiamanti.
+- `IMPROVED`: target `9/8/11/1`, nessun helper; file cognitiva `620 -> 618`,
+  ciclomatica `474 -> 472`, decisioni `406 -> 404`, callable 68 invariati,
+  LOC `1.448 -> 1.446`. Error 17 invariati, Warning `11 -> 10`; target sotto
+  tutte le soglie, nessun debito trasferito. Esplorazioni SNMP e inference
+  rimaste soltanto in /tmp, nessun loro candidato applicato al runtime.
+- 1.248 test Network PASS prima/dopo, 80 nuovi, zero failure/error/skip.
+  Tutte le 64 combinazioni delle sei porte con ordine, duplicati e varie
+  forme iterable; generatori che falliscono e materializzazione completa.
+  Full-file services.py 100% statement/branch: `804/804 e 284/284 -> 802/802
+  e 282/282`, zero missing/partial, dieci esclusioni legacy invariate.
+- 10.000 differenziali equivalenti per risultato/errori e trace iteratore;
+  AST delle altre 67 funzioni/import/stato modulo invariato. Quattro mutanti
+  in memoria respinti: precedenza RDP 16 failure, SMB+SSH invertito 19,
+  HTTPS ignorato 2, materializzazione rimossa 37; zero error/skip.
+- Ruff runtime/test, format nuovo test, lint-backend e diff-check PASS.
+  Ratchet scoped origin/main prima/dopo PASS, merge-base `686e529e`;
+  globale exit 2 solo ambiguous_identity Tributi useEffect[0]<callback>,
+  dieci candidati preesistenti. Nessun PASS globale o sync/verify baseline.
+- Report completi isolati 1.963 file e 22.648 callable invariati; Error
+  1.890 invariati, Warning `2.941 -> 2.940`. Solo services.py cambia,
+  zero parse/exception error. Altri WIP, baseline/soglie/eccezioni/matcher e
+  report condivisi preservati, hash verificati; runtime finale=candidato.
+- Graphify Network Make 496 nodi/1.240 archi; platform docs e verifica chunk/
+  warning nel checkpoint finale. Rapporto `NETWORK_OS_PORTS_2026-11-17.md`,
+  artefatti `/tmp/gaia-network-os-ports-refactor-20261117/`.
+- Dalla ripresa 32 slice migliorative: -28 Error, -33 Warning e -222 cognitiva
+  aggregata tool. Singolo hotspot concluso, nessun commit/push/merge/deploy;
+  goal generale attivo. Prossima azione review e selezione alla continuazione.
+
+## 2026-11-17 — Decodifica valori Syslog Sophos
+
+- Turno precedente progresso; nuovo singolo hotspot sul parser in sophos.py,
+  prima pulito contro HEAD `743b21c1`. Ownership Network confermata dal peer;
+  altri WIP e slice precedenti preservati. Nessun intervento Communications.
+- Prima parser cognitive/cyclomatic/LOC/nesting `14/7/11/4`, un Warning
+  nesting. File cognitiva 121, ciclomatica 100, decisioni 85, callable 15,
+  LOC 303. Estrazione della sola decodifica di un valore con guardia precoce:
+  conservare slice delle virgolette, shlex, fallback solo ValueError, errori,
+  ordine dei campi e ultimo valore per chiavi duplicate. Nessun cambio regex.
+- Prima runtime: suite Network 1.168 PASS, zero failure/error/skip;
+  22 test nuovi rieseguiti dopo aggiunta asserzione ramo Warning. Coverage
+  completa sophos.py 165/165 statement e 54/54 branch, zero esclusioni.
+  Prima misura senza nuovo test 86%; misura intermedia 99% conservata.
+- Una fixture iniziale senza log_type falliva per il comportamento previsto
+  del prefisso (primo token hostname): corretta prima del runtime. Esecuzione
+  isolata richiede registrazione modelli via Base, aggiunta al nuovo test.
+  Log tentativi conservati; nessuna failure runtime nuova non spiegata.
+- `IMPROVED`: parser `1/2/5/1`, helper `7/6/7/2` sotto soglia. Ruff I001 e
+  UP017 preesistenti richiedono import ordinati e alias datetime.UTC identico
+  timezone.utc. File cognitiva `121 -> 115`, ciclomatica `100 -> 101` per
+  callable `15 -> 16`, decisioni 85 invariate; LOC `303 -> 309` incluso
+  wrapping import. Error 5 invariati, Warning `4 -> 3`, nessun debito trasferito.
+- Dopo: 1.168 test Network PASS, zero failure/error/skip, full-file sophos.py
+  165/165 statement e 54/54 branch 100%, zero esclusioni/missing/partial.
+  10.000 messaggi differenziali equivalenti per valori, ordine ed eccezioni;
+  altre 14 funzioni AST identico, caller ricostruito col blocco originale.
+  Quattro mutanti in memoria respinti: no decode 10 failure, catch Exception
+  2, valori non quotati troncati 7, fallback rimosso 2; zero error/skip.
+- Ruff runtime/test, format test nuovo, lint-backend e diff-check PASS.
+  Ratchet scoped origin/main prima/dopo PASS, merge-base `686e529e`;
+  globale exit 2 solo ambiguous_identity Tributi useEffect[0]<callback>,
+  dieci candidati, finding preesistente. Nessun PASS globale/sync/verify baseline.
+- Report completi isolati 1.963 file, callable `22.647 -> 22.648`, Error
+  1.890 invariati, Warning `2.942 -> 2.941`. Solo sophos.py cambia, zero
+  parse/exception error. Hash WIP estranei, runtime precedenti, baseline,
+  eccezioni, matcher e report condivisi verificati invariati.
+- Graphify Network Make 496 nodi/1.240 archi; platform docs e verifica chunk/
+  warning nel checkpoint finale. Rapporto `NETWORK_SYSLOG_VALUES_2026-11-17.md`,
+  artefatti `/tmp/gaia-network-syslog-unquote-refactor-20261117/`.
+- Dalla ripresa 31 slice migliorative: -28 Error, -32 Warning e -220 cognitiva
+  aggregata tool. Nessun secondo hotspot, commit/push/merge/deploy; goal
+  generale attivo. Prossima azione review e selezione alla continuazione.
+
+## 2026-11-17 — Diff snapshot Network
+
+- Ripresa dal candidato e dalla suite gia avviata, HEAD `743b21c1`;
+  ownership limitata a `_build_diff` in services.py e al nuovo
+  `test_network_scan_diff.py`. Altri WIP, Communications e baseline preservati.
+- Prima: cognitive/cyclomatic/LOC/nesting `22/14/24/2`, due Warning.
+  File cognitiva 633, ciclomatica 481, 68 callable e LOC 1.448.
+  Suite Network prima: 1.146 PASS, zero failure/error/skip; services.py
+  full-file 804/804 statement e 284/284 branch, dieci righe legacy degli
+  import opzionali escluse come prima. Ratchet scoped origin/main PASS.
+- Slice: rimuovere tre guardie ridondanti. Le chiavi sono l'unione delle
+  mappe, i valori sono snapshot non-None; un elemento None viene rifiutato
+  da `_snapshot_key` prima del ciclo. Conservare last-write-wins, ordinamento
+  chiavi/categorie, identita oggetti, accessi, confronti ed eccezioni.
+- `IMPROVED`: target `9/7/24/2`, nessun helper o nuova callable;
+  file cognitiva `633 -> 620`, ciclomatica `481 -> 474`, decisioni
+  `413 -> 406`, callable 68 e LOC 1.448 invariati. Error 17 invariati,
+  Warning `13 -> 11`; target sotto tutte le soglie, nessun debito trasferito.
+- Dopo: 1.146 test PASS inclusi 15 nuovi, zero failure/error/skip;
+  servizi full-file 804/804 statement e 284/284 branch, 100%, esclusioni
+  legacy invariate. 4.000 confronti differenziali equivalenti per duplicati,
+  priorita MAC, identita, ordine payload/risultati, confronti ed errori.
+  AST delle altre 67 funzioni/import/stato modulo invariato.
+- Ruff runtime/test, format test nuovo, lint-backend e diff-check PASS;
+  ratchet scoped origin/main prima/dopo PASS, merge-base `686e529e`.
+  Peer Codex conferma ownership invariata e nessuna sovrapposizione Network;
+  audit storico distinto, Communications chiuso. Altri WIP preservati.
+- Graphify Network Make aggiornato, nessuna variazione topologica. Rapporto
+  `NETWORK_SCAN_DIFF_2026-11-17.md`; artefatti e verifiche globali finali in
+  `/tmp/gaia-network-scan-diff-refactor-20261117/`.
+- Report completi isolati prima/dopo: 1.963 file, 22.647 callable,
+  Error 1.890 invariati, Warning `2.944 -> 2.942`. Solo services.py cambia;
+  zero parse/exception error. Ratchet globale exit 2 per il finding Tributi
+  preesistente `useEffect[0]<callback>` ambiguous_identity, dieci candidati;
+  nessun PASS globale o sync/verify baseline. Baseline/soglie/eccezioni/
+  matcher/report condivisi intatti. Graphify docs verificato nel checkpoint.
+- Dalla ripresa 30 slice migliorative: -28 Error, -31 Warning e -214 cognitiva
+  aggregata tool. Nessun secondo hotspot, commit/push/merge/deploy; goal
+  generale attivo. Prossima azione: review della singola slice conclusa.
+
+## 2026-11-17 — Meta refresh HTTP Network
+
+- Prosecuzione dopo scan history conclusa; una sola unita su
+  `_resolve_http_metadata` di services.py, inizialmente pulito contro HEAD
+  `743b21c1`. Altri WIP, audit peer storico e report condivisi preservati.
+- Prima cognitive/cyclomatic/LOC/nesting `44/20/57/5`, tre Error e un Warning;
+  file cognitiva 644, decisioni 415, LOC 1.451 gia in debito.
+- `_follow_http_meta_refresh` conserva GET/status/text e fallback Exception;
+  selezione dichiarativa HTTP/HTTPS con identico ordine membership, eliminata
+  guardia lista vuota ridondante al return finale. Client/with/except esterni,
+  User-Agent/TLS/timeout, URL, soglia500, stato risposta/body parziale, parse
+  dopo close e prima risposta valida anche vuota invariati. Contratto del
+  Client.__exit__ installato verificato: cleanup non sopprime gli errori.
+- `IMPROVED`: wrapper `44/20/57/5→28/15/45/3`, helper `5/4/9/2` con quattro
+  parametri, sotto soglia. File cognitiva 644→633, ciclomatica 482→481,
+  callable 67→68, decisioni 415→413, LOC 1.451→1.448, densita
+  0,776017→0,769337. Error file/callable 18→17, Warning 14→13: rimossi nesting
+  Error e LOC Warning del target; restano Error cognitive/cyclomatic nel target
+  e LOC file legacy. Nessuna nuova violation o debito trasferito all'helper.
+- Intera suite Network prima/dopo 1.131 test PASS, inclusi 27 nuovi, zero
+  failure/error/skip. Runtime full-file statement/branch 100% secondo la
+  configurazione esistente: prima 807/807 e 290/290, dopo 804/804 e 284/284,
+  zero missing/partial. Dieci righe legacy degli import opzionali gia escluse
+  restano identiche; nessuna nuova esclusione/configurazione. Test esistenti intatti.
+- 4.000 differenziali equivalenti per risultato, richieste/parametri/ordine,
+  cleanup client, risposta/body parzialmente aggiornati, parse, iterazione
+  porte, Exception/BaseException. Sessantacinque altre funzioni top-level e
+  import/stato modulo invariati. Espansione helper, equivalenza dei candidati
+  letterali ordinati e guardia lista vuota ricostruiscono l'AST originale.
+- Sei mutanti in memoria respinti dai nuovi test, zero collection error/skip:
+  status500 accettato (2 failure), cancellazione soppressa (2), risposta non
+  sostituita (5), HTTPS anticipato (12), porte consumate senza httpx (1),
+  pagina vuota valida che tenta il secondo schema (1). Nessun mutante su disco.
+- Ruff runtime/test, format nuovo test, lint-backend 262 file e diff-check PASS.
+  Ratchet scoped origin/main prima/dopo PASS, merge-base `686e529e`; globale
+  exit 2 sulla stessa ambiguita Tributi useEffect[0]<callback>, dieci candidati,
+  presente prima della slice (audit peer HEAD0/WIP2). Baseline/scope/soglie/
+  eccezioni/matcher/report condivisi intatti; nessuna sync/verify o PASS globale.
+- Report completi isolati 1.963 file, callable 22.646→22.647, Error
+  1.891→1.890, Warning 2.945→2.944. Solo services.py cambia, zero parse/exception
+  error; before identico al completo finale scan history precedente.
+- Graphify Network Make aggiornato: 495 nodi/1.238 archi; platform docs e
+  verifica chunk/warning nel checkpoint finale. Rapporto
+  `NETWORK_HTTP_REFRESH_2026-11-17.md`; artefatti
+  `/tmp/gaia-network-http-refresh-refactor-20261117/`.
+- Dalla ripresa 29 slice migliorative: −28 Error, −29 Warning, −201 cognitiva
+  aggregata tool. Singolo hotspot concluso, nessun secondo hotspot, commit/
+  push/merge/deploy. Prossima azione review e nuova selezione alla continuazione;
+  goal generale attivo.
+
+## 2026-11-17 — Cronologia scansioni condivisa Network
+
+- Turno precedente progresso: job telemetry concluso, hash verificati.
+  Singola responsabilita: mapping dei sette campi scan history, quattro copie
+  identiche in helpers/devices.py, helpers/tracking.py e helpers/inference.py.
+  HEAD `743b21c1`; devices/inference prima puliti, tracking con slice precedenti
+  verificate. Ownership Network libera; altri WIP e audit peer storico preservati.
+- `_serialize_scan_history` ora condivide list comprehension e mapping ordinato.
+  Fallback `scan_history or []` soltanto nel device, assenza negli altri,
+  query e limit=8 nel punto originale, ordine iterator/getter/chiavi, riferimenti,
+  duplicati ed errori invariati. Nessuna query, cache o coercizione aggiunta.
+- `IMPROVED`: quattro comprehension fisiche diventano una; cognitiva aggregata
+  tre file 373→364, ciclomatica 290→287, callable 40→41, decisioni 250→246,
+  LOC 1.029→1.005. Il motore include ensure_candidate anche nel padre:
+  contando solo owner disgiunti, cognitiva 336→330 e decisioni 227→224.
+  Entrambe le letture migliorano, nessuna riduzione solo apparente da overlap.
+- Helper `1/2/13/0` cognitive/cyclomatic/LOC/nesting, un parametro e zero
+  violation. Device serializer `7/8/55→6/7/44`, tracked serializer
+  `7/8/39→6/7/28`; inferred ARP `27/15/98→25/14/87`. Error 9→8, Warning 5
+  invariati: rimosso LOC Warning device, cyclomatic ARP da Error a Warning;
+  nessun debito nel nuovo helper. Restano i finding legacy nell'inferenza.
+- Prima/dopo runtime: 1.104 test Network PASS, inclusi 24 nuovi, zero failure/
+  error/skip. Full-file statement/branch 100% per tutti i tre runtime: prima
+  456/456 e 182/182, dopo 459/459 e 182/182. Zero esclusioni/missing/partial;
+  nessun test esistente modificato o indebolito, nessuna nuova failure applicativa.
+- 4.000 confronti differenziali sui quattro punti d'uso equivalenti per mapping,
+  query/parametri/limit, iterazione/getter/chiavi, truthiness, errori e stato
+  parziale. Tutte le funzioni preesistenti dei tre moduli hanno AST identico
+  espandendo il mapper; stato modulo invariato, import estesi solo per il riuso.
+- Sei mutanti solo in memoria respinti dai nuovi test, zero collection error/
+  skip: campo rimosso (8 failure), righe invertite (2), ports copiati (2), ordine
+  campi alterato (12), None accettato nel mapper (1), iterabile materializzato
+  prima dei getter (16). Nessun mutante applicato al checkout.
+- Ruff runtime/test, format nuovo test, lint-backend 260 file e diff-check PASS.
+  Ratchet scoped origin/main prima/dopo PASS, merge-base `686e529e`; globale
+  exit 2 per la stessa ambiguita Tributi useEffect[0]<callback>, dieci candidati.
+  Blocco del delta Tributi preesistente alla slice, come da audit peer HEAD0/WIP2;
+  baseline/scope/soglie/eccezioni/matcher/report condivisi intatti, nessuna sync/verify.
+- Report completi isolati 1.963 file, callable 22.645→22.646, Error
+  1.892→1.891, Warning 2.945 invariati. Solo i tre helper autorizzati cambiano,
+  zero parse/exception error; before identico al completo finale telemetry.
+- Graphify Network Make aggiornato: 494 nodi/1.236 archi; platform docs e
+  verifica chunk/warning nel checkpoint finale. Rapporto
+  `NETWORK_SCAN_HISTORY_2026-11-17.md`; artefatti
+  `/tmp/gaia-network-scan-history-refactor-20261117/`.
+- Dalla ripresa 28 slice migliorative: −27 Error, −28 Warning, −190 cognitiva
+  aggregata del tool. Singola responsabilita conclusa, nessun secondo hotspot,
+  commit/push/merge/deploy. Prossima azione review e nuova selezione alla
+  continuazione; goal generale attivo.
+
+## 2026-11-17 — Lock del job telemetry Network
+
+- Turno precedente progresso verificato: slice creation conclusa. Una nuova
+  unita su `_run_job_wrapper` di telemetry_scheduler.py, runtime inizialmente
+  pulito contro HEAD `743b21c1`; altre slice e WIP concorrenti preservati.
+- Prima cognitive/cyclomatic/LOC/nesting `20/10/42/3`, due Warning; file
+  cognitiva 22, ciclomatica 14, callable 3, decisioni 11, LOC 85.
+- Acquisizione e rilascio advisory lock PostgreSQL separati in due helper.
+  Connessione salvata prima dell'acquisizione, cursor.close nei finally,
+  due suppress(Exception) indipendenti, raw_connection dopo factory/consume,
+  skip concorrente e messaggio, refresh prima di prune, close DB sync/awaitable
+  prima di unlock/close connessione/next generator invariati. Errori e
+  cancellazioni conservano ordine e precedenza anche durante il cleanup.
+- `IMPROVED`: wrapper `20/10/42/3→14/8/30/3`, acquire `1/2/7/1`, release
+  `1/2/9/1`, un parametro ciascuno. Tutti sotto soglia; file cognitiva 22→18,
+  ciclomatica 14→16 per callable 3→5, decisioni 11 invariate, LOC 85→92,
+  densita 0,423529→0,369565. Warning 2→0, Error 0 invariati; nessun debito
+  trasferito. Import Callable e multilinea sistemati per UP035/I001 riprodotti
+  sul sorgente originale; gli altri nodi modulo restano invariati.
+- 59 test PASS prima/dopo (56 nuovi, 3 runner piattaforma), zero failure/error/
+  skip. Runtime full-file statement/branch 100%: prima 58/58 e 16/16, dopo
+  62/62 e 16/16, zero esclusioni/missing/partial. Primo avvio dei nuovi test
+  con marker asyncio non supportato: usato anyio gia presente nel progetto,
+  backend asyncio, senza installazioni o modifiche ai gate. Nessuna nuova
+  failure applicativa; nessun test esistente cambiato o indebolito.
+- 4.000 confronti differenziali equivalenti per risultato/errori/precedenza,
+  SQL/parametri, ordine operazioni/cleanup e stato generator; include falsy/
+  truthy, DB sync/async/senza close e fino a tre errori contemporanei, inclusi
+  BaseException. AST wrapper identico espandendo i due helper e riportando il
+  return acquisizione all'assegnazione originale; altre due funzioni identiche.
+- Sei mutanti in memoria respinti dai nuovi test, zero error/skip: cursor
+  acquisizione non chiuso (19 failure), BaseException soppressa (3), unlock
+  prima del close DB (10), connessione non chiusa (28), job senza lock (8),
+  chiave lock errata (16). Nessun mutante applicato al checkout.
+- Ruff runtime/test, format nuovo test, lint-backend 258 file e diff-check PASS.
+  Ratchet scoped origin/main prima/dopo PASS, merge-base `686e529e`; globale
+  exit 2 per la stessa ambiguita Tributi useEffect[0]<callback>, dieci candidati,
+  preesistente alla slice (HEAD Tributi PASS, WIP exit 2 nell'audit peer). Baseline,
+  scope, soglie, eccezioni, matcher e report condivisi intatti; nessuna sync/verify.
+- Report completi isolati 1.963 file, callable 22.643→22.645, Error 1.892
+  invariati, Warning 2.947→2.945. Solo telemetry_scheduler.py cambia, zero
+  parse/exception error; before identico alla scansione completa precedente.
+- Graphify Network Make aggiornato: 493 nodi/1.232 archi; platform docs e
+  verifica chunk/warning nel checkpoint finale. Rapporto
+  `NETWORK_TELEMETRY_LOCK_2026-11-17.md`; artefatti
+  `/tmp/gaia-network-telemetry-lock-refactor-20261117/`.
+- Dalla ripresa 27 slice migliorative: −26 Error, −28 Warning, −181 cognitiva
+  aggregata. Audit peer dei 36 file resta storico e non certifica questa slice;
+  coordinamento chiuso, niente messaggi intermedi salvo conflitti Communications.
+  Nessun secondo hotspot, commit/push/merge/deploy; goal generale attivo.
+  Prossima azione review e nuova selezione con ownership libera alla continuazione.
+
+## 2026-11-17 — Creazione soggetti tracciati Network
+
+- Ripresa dopo checkpoint coordinato con Codex Communications: audit isolato
+  completo, 36 hash identici; ownership Network confermata. L'audit precedente
+  resta storico e non certifica questa slice. WIP Tributi/config/report intatti;
+  nessun commit/main o sincronizzazione baseline autorizzati.
+- Singolo hotspot `create_tracked_subject` in router/routes/tracking.py,
+  HEAD `743b21c1`. Runtime iniziale uguale al freeze congiunto; prima route
+  cognitive/cyclomatic/LOC/nesting `48/29/72/3`, due Error e un Warning;
+  file cognitiva 82, decisioni 58, Error 3/Warning 3.
+- `_resolve_tracking_target` separa validazione e risoluzione device/valore;
+  `_reactivate_tracked_subject` condivide aggiornamento dei metadati e
+  persistenza existing/legacy. Auth prima delle letture; SQL/parametri/ordine,
+  reconcile e due commit/refresh legacy, letture ORM, campi omessi/vuoti,
+  autore originale, nuovi soggetti e serializzazione senza activity invariati.
+- `IMPROVED`: route `48/29/72/3→13/13/42/2`; resolver `6/5/18/2` (2 parametri),
+  riattivazione `9/8/18/1` (4), entrambi sotto tutte le soglie. File cognitiva
+  82→62, ciclomatica 70→67, callable 12→14, decisioni 58→53, LOC 376→382,
+  densita 0,404255→0,337696. Error 3→1, Warning 3 invariati: la route perde
+  Warning LOC e conserva solo cyclomatic Warning, prima Error. Nessun helper
+  riceve debito; metrica obiettivo e aggregati scendono.
+- Prima del runtime e dopo: 120 test PASS (50 API, 18 helper, 20 VPN summary,
+  32 nuovi creation), zero failure/error/skip. Runtime full-file statement e
+  branch 100%: prima 177/177 e 52/52, dopo 175/175 e 50/50; zero esclusioni,
+  missing o branch parziali. Nessun test preesistente modificato o indebolito.
+- 4.000 confronti differenziali equivalenti per risultati, errori, SQL e
+  parametri, ordine letture/getter/scritture, commit/refresh e stato parziale.
+  Undici altri callable AST, dodici firme/decorator/return e gli altri nodi
+  top-level invariati. Include errori iniettati a ogni posizione e IP variabile.
+- Sei mutanti in memoria respinti dai nuovi test, zero collection error/skip:
+  primo commit legacy rimosso (7 failure), label vuoto ignorato (3), legacy
+  ricollegato al device dopo refresh (1), autore sovrascritto (9), activity
+  summary abilitato (9), normalizzazione saltata (7). Nessun mutante su disco.
+- Ruff runtime/test, format nuovo test, lint-backend 256 file e diff-check PASS.
+  Ratchet mirato origin/main PASS prima/dopo, merge-base `686e529e`; globale
+  exit 2 per Tributi useEffect[0]<callback>, dieci candidati. L'audit peer ha
+  provato HEAD Tributi PASS e delta WIP exit 2: blocco presente prima di questa
+  slice, non attribuito genericamente a main. Nessun PASS globale o sync/verify.
+- Report completi isolati: 1.963 file, callable 22.641→22.643, Error
+  1.894→1.892, Warning 2.947 invariati. Solo routes/tracking.py cambia;
+  zero parse/exception error. Report prima identico alla scansione completa
+  finale della slice precedente. Baseline/scope/soglie/eccezioni/matcher e
+  report condivisi preservati.
+- Graphify Network Make aggiornato: 491 nodi/1.228 archi; platform docs e
+  verifica chunk/warning nel checkpoint finale. Dettagli in
+  `NETWORK_TRACKING_CREATION_2026-11-17.md`; artefatti
+  `/tmp/gaia-network-create-tracking-refactor-20261117/`.
+- Dalla ripresa 26 slice migliorative: −26 Error, −26 Warning, −177 cognitiva
+  aggregata. Singolo hotspot concluso; nessun commit/push/merge/deploy o
+  secondo hotspot. Residui nel file: parametri e LOC lista, cyclomatic create
+  a Warning; goal generale attivo. Prossima azione review, poi nuova selezione
+  con ownership libera alla continuazione.
+
+## 2026-11-17 — Riepilogo VPN bypass Network
+
+- Turno precedente progresso verificato; prosecuzione su un solo hotspot,
+  `get_vpn_bypass_summary` in router/routes/tracking.py. HEAD iniziale
+  `743b21c1`, runtime inizialmente pulito. Prima cognitive/cyclomatic/LOC/
+  nesting `26/21/86/2`, tre Error; file cognitiva 96, decisioni 66.
+- Slice: separare accumulo dei contatori per soggetto e raccolta dei conteggi
+  alert, condividendo il SELECT/status ripetuto. Preservare auth/seed/lista
+  soggetti e opzioni, fallback activity con window, letture ripetute, conteggi
+  indipendenti per categoria, somma solo suspicious positivi, sei query
+  ordinate con gli stessi SQL/parametri e fallback scalar or 0, risposta/errori.
+- Candidato esterno route `1/2/36/1`; helper accumulo `7/8/15/1`, raccolta
+  alert `2/3/36/0`, query comune `2/3/7/0`, parametri rispettivamente 3/1/2.
+  Tutti sotto soglia; file cognitiva 96→82, decisioni 66→58, nessuna violation
+  trasferita. Una prima disposizione lasciava LOC warning nella route: il
+  confine delle sei query resta insieme nel collector, con contratto esplicito.
+- Prima del runtime: 88 test PASS (20 nuovi), full-file statement/branch 100%
+  (174/174 statement, 52/52 branch), zero esclusioni/missing/partial.
+  4.000 differenziali equivalenti per risposta, eccezioni, SQL/parametri,
+  letture/getter/bool/default e ordine auth/seed/soggetti/query/response.
+- Otto altri callable AST invariati; nove firme/return/decorator e nove
+  contratti route preservati. Loop equivalente dopo mapping dei contatori,
+  AST query identico espandendo il SELECT comune, campi risposta identici.
+  Artefatti `/tmp/gaia-network-vpn-summary-refactor-20261117/`.
+- `IMPROVED`: route `26/21/86/2 → 1/2/36/1`, zero violation nella route e
+  nei tre helper. File cognitiva 96→82, ciclomatica 75→70, callable 9→12,
+  decisioni 66→58, LOC 367→376, densita 0,465940→0,404255. Error 6→3,
+  Warning 3 invariati: tre Error eliminati senza trasferire debito.
+- 88 test PASS prima/dopo: 50 API, 18 helper, 20 nuovi casi; zero skip/failure/
+  error. Full-file statement/branch 100%, prima 174/174 statement e 52/52
+  branch, dopo 177/177 e 52/52; zero esclusioni, missing o branch parziali.
+  Nessun test esistente modificato o indebolito.
+- Sei mutanti in memoria respinti dai nuovi test, senza collection error o skip:
+  suspicious letto una sola volta (1 failure), categorie indipendenti saltate
+  (2), eventi contati al posto dei soggetti (1), alert chiusi inclusi (1), tipo
+  alert mancante (1), scalar None senza fallback a zero (1). Nessun mutante
+  applicato al checkout. Nessuna nuova failure applicativa; 98 warning JWT
+  preesistenti nella suite API.
+- Ratchet mirato origin/main PASS prima/dopo, merge-base `686e529e`;
+  globale exit 2 per la stessa ambiguita Tributi useEffect[0]<callback>,
+  dieci candidati. Baseline/scope/soglie/eccezioni/matcher intatti;
+  nessuna sync/verify. Report condivisi preservati, report isolati completi
+  1.963 file, callable 22.638→22.641, Error 1.897→1.894, Warning 2.947
+  invariati; cambia solo routes/tracking.py, zero parse/exception error.
+- Ruff runtime/test, format nuovo test, lint-backend 255 file e diff-check
+  PASS. Graphify Network Make 489 nodi/1.223 archi; platform docs e verifica
+  chunk/warning nel checkpoint finale. Rapporto `NETWORK_VPN_SUMMARY_2026-11-17.md`.
+- Dalla ripresa 25 slice migliorative: −24 Error, −26 Warning, −157 cognitiva
+  aggregata. Hash delle altre slice/baseline/report preservati; modifiche
+  concorrenti Ruolo/frontend intatte. Nessun commit/push/merge/deploy o
+  secondo hotspot. Residui file: creazione tracking, parametri e LOC lista;
+  goal generale attivo.
+
+## 2026-11-17 — Policy ingestione listener Syslog Network
+
+- Prosecuzione ondate; turno precedente progresso di caratterizzazione
+  TEST_ONLY, nessuna riduzione contabilizzata. Singolo hotspot
+  `SophosSyslogListener.handle_message`, HEAD iniziale `8f65d353`;
+  runtime inizialmente pulito. Prima cognitive/cyclomatic/LOC/nesting
+  `16/10/22/2`, due Warning; file cognitiva 51, decisioni 36.
+- Slice: isolare policy/log skip/ingestione nel metodo `_ingest_message`;
+  handle_message conserva creazione sessione prima del try, except Exception,
+  logging errore prima del rollback e close nel finally. Preservare letture
+  self e policy, fallback IP, argomenti logger/ingest, ordine ed errori anche
+  quando logging, rollback o close falliscono. Worker, UDP e concorrenza intatti.
+- Candidato esterno handle `7/5/9/2`, helper `6/6/15/1` con quattro parametri
+  sotto soglia; cognitiva file 51→48, decisioni 36 invariate. Nessuna violation
+  trasferita. Caratterizzazione prima del runtime: 61 test PASS, full-file
+  statement/branch 100% (95/95 statement, 20/20 branch), zero esclusioni.
+- 5.000 confronti differenziali equivalenti per risultato, eccezioni incluse
+  BaseException, letture/getter/bool/logger/ingest/rollback/close e stato parziale.
+  Cinque altri metodi AST invariati; handle AST identico espandendo helper,
+  altri nodi top-level e sei firme/return preservati. Artefatti
+  `/tmp/gaia-network-syslog-policy-refactor-20261117/`.
+- `IMPROVED`: handle `16/10/22/2 → 7/5/9/2`, helper `6/6/15/1`, quattro
+  parametri sotto soglia. File cognitiva 51→48, ciclomatica 45→46,
+  callable 9→10, decisioni 36 invariate, LOC 131→133, densita
+  0,732824→0,706767. Error 0 invariati, Warning 3→1, nessuna violation trasferita.
+- 61 test PASS prima e sui byte finali: 26 servizi/script e 35 nuovi casi;
+  zero skip/failure/error. Full-file statement/branch 100%, prima 95/95
+  statement e 20/20 branch, dopo 97/97 e 20/20; nessuna esclusione/missing/
+  partial. Nessun test esistente modificato o indebolito.
+- Sei mutanti in memoria respinti dai nuovi test, senza collection error o skip:
+  policy disabilitata ignorata (16 failure), rollback rimosso (6), close rimosso
+  (22), session factory dentro il try (1), client IP preferito (3), cattura di
+  BaseException (1). Nessun mutante applicato al checkout.
+- Prima verifica lint fallita per UP035 sul preesistente import Callable da
+  typing, riprodotto anche sul runtime originale. Corretto in collections.abc
+  secondo la policy del file toccato; ripetuti test, differenziale e ratchet
+  mirato sui byte finali. Il confronto AST top-level ammette solo questo import.
+- Ruff runtime/test, format nuovo test, lint-backend 253 file e diff-check PASS.
+  Nessuna nuova failure applicativa. Report completo prima/dopo 1.963 file,
+  callable 22.637→22.638, Error 1.897 invariati, Warning 2.949→2.947;
+  variano solo le metriche di sophos_syslog_listener.py. La scansione finale
+  dopo il fix import riproduce esattamente metriche, callable e violation del
+  report completo dopo, senza riscrivere i report condivisi.
+- Ratchet mirato origin/main PASS prima/dopo e finale; merge-base `686e529e`.
+  Globale finale exit 2 per la stessa ambiguita Tributi useEffect[0]<callback>,
+  dieci candidati; Graphify docs nel checkpoint. Nessuna baseline
+  sync/verify; baseline/scope/soglie/eccezioni/matcher intatti. Dalla ripresa
+  24 slice migliorative: −21 Error, −26 Warning, −143 cognitiva aggregata.
+- Graphify Network Make 486 nodi/1.216 archi; verifica finale dopo fix import
+  senza variazioni topologiche. Rapporto `NETWORK_SYSLOG_POLICY_2026-11-17.md`.
+  Modifiche concorrenti preservate. Residuo: sei parametri costruttore listener.
+  Nessun commit/push/merge/deploy o secondo hotspot; goal generale attivo.
+- Durante la chiusura HEAD avanzato esternamente a `b83c4de1`, commit
+  Communications di un altro autore. Hash runtime/protetti invariati e
+  merge-base ricontrollato; nessun commit creato da questa slice.
+
+## 2026-11-17 — Batch registrazione metriche SNMP Network
+
+- Ripresa del goal ondate; turno precedente classificato come progresso
+  verificato. Singolo hotspot `poll_sophos_firewall_metrics`, HEAD iniziale
+  `8f65d353`, sorgenti e working tree ricontrollati. Runtime originale
+  cognitive/cyclomatic/LOC/nesting `12/11/40/2`; file cognitiva 70,
+  decisioni 53, un Error parametri e un Warning ciclomatico.
+- Candidato solo esterno: separare la registrazione del batch mantenendo
+  ordine definizioni e duplicati, membership prima dei getter, due letture
+  values[key], firewall.id per ogni record, add/flush per metrica prima di
+  last_seen/status/add firewall e unico commit, senza rollback o retry.
+- `NO_SAFE_CHANGE`: polling candidato `9/9/23/1`, helper `3/3/26/2`, ma
+  cinque parametri introducono un Warning. Il Warning ciclomatico sarebbe
+  sostituito da quello sui parametri: saldo Error/Warning zero, cognitiva 70
+  e decisioni 53 invariate, LOC 190→199. Candidato respinto senza applicarlo;
+  nessun raggruppamento artificiale dei parametri o lettura ORM anticipata.
+- Consegna solo test di caratterizzazione del batch; runtime intatto.
+  Artefatti `/tmp/gaia-network-snmp-recording-refactor-20261117/`.
+- 164 test PASS: suite servizi/API/precedenti SNMP 148 casi e 16 nuovi;
+  zero skip/failure/error. Full-file runtime statement/branch 100%, 121/121
+  statement e 44/44 branch, zero esclusioni/missing/partial. Nessun test
+  esistente modificato o indebolito.
+- Cinque mutanti solo in memoria respinti dai nuovi test, senza errori di
+  collection o skip: deduplica impropria (1 failure), ID firewall accorpato
+  (3), valore grezzo accorpato (1), commit per metrica (8), mancata
+  finalizzazione del batch senza corrispondenze (1). Il candidato respinto
+  non e stato applicato o certificato come behavior-preserving.
+- Report corrente completo identico al precedente per file/callable/violation:
+  1.963 file, 22.637 callable, 1.897 Error, 2.949 Warning. Saldo del turno
+  zero; restano 23 slice migliorative, −21 Error/−24 Warning/−140 cognitiva
+  aggregata dalla ripresa. Questa consegna TEST_ONLY non incrementa il totale.
+- Ratchet mirato origin/main PASS; globale exit 2 per la stessa ambiguita
+  Tributi useEffect[0]<callback>, 10 candidati; Graphify docs nel checkpoint
+  finale. Baseline/scope/soglie/eccezioni e report condivisi intatti;
+  nessuna sync/verify. Ruff nuovo test, format, lint-backend 251 file e
+  diff-check PASS. Nessuna nuova failure applicativa; 98 warning JWT preesistenti.
+- Graphify Network Make conferma nessuna variazione della topologia. Rapporto
+  `NETWORK_SNMP_RECORDING_2026-11-17.md`; modifiche concorrenti preservate.
+  Nessun commit/push/merge/deploy, runtime applicato o secondo hotspot.
+
+## 2026-11-17 — Validazione assegnatario patch dispositivi Network
+
+- Ripresa autorizzata; singolo hotspot `patch_device` in
+  `backend/app/modules/network/router/routes/devices.py`, HEAD iniziale
+  `8f65d353`. Prima cognitive/cyclomatic/LOC/nesting `14/11/33/2`;
+  file cognitiva 32, un Error parametri e un Warning ciclomatico.
+- Slice: separare la validazione assegnatario dall'orchestrazione della patch.
+  Preservare auth, device lookup prima del payload, exclude_unset, distinzione
+  assente/None/zero, lookup e 404 prima della logica lifecycle, letture ripetute,
+  ordine setter/sync/add/commit/refresh/serializzazione e stato parziale in errore.
+- Candidato esterno: route `8/7/30/2`, validatore `6/5/5/2`, sotto soglia;
+  cognitiva aggregata 32 e decisioni 26 invariate. Obiettivo: un Warning in meno,
+  senza rivendicare riduzione cognitiva aggregata. Lavoro concorrente preservato.
+- Prima del runtime: 118 test PASS (26 nuovi), full-file statement/branch 100%;
+  4.000 confronti differenziali equivalenti e patch AST identico dopo espansione
+  dell'helper. Artefatti `/tmp/gaia-network-device-assignee-refactor-20261117/`.
+- `IMPROVED` sulla ciclomatica obiettivo: route `14/11/33/2 → 8/7/30/2`,
+  helper `6/5/5/2`, due parametri, nessuna violation trasferita. File cognitiva
+  32 invariata, ciclomatica 34→35, callable 8→9, decisioni 26 invariate;
+  LOC 195→197, densita 0,338462→0,340102. Error 1 invariato, Warning 1→0.
+  Nessuna riduzione cognitiva o delle decisioni aggregate rivendicata.
+- 118 test PASS anche dopo: 50 API, 18 helper, 24 bulk e 26 assignee; zero
+  skip/failure/error nei due XML. Full-file statement/branch 100% prima
+  94/94 statement e 30/30 branch, dopo 96/96 e 30/30; zero esclusioni,
+  righe mancanti o branch parziali. Nessun test esistente modificato.
+- Differenziale 4.000 scenari equivalente per risposta, eccezioni, stato
+  parziale device/updates e trace ordinato query/getter/setter/clock/auth/
+  sync/add/commit/refresh/serializzazione. Sette altri callable AST invariati;
+  otto firme/return/decorator e sette contratti route preservati.
+- Cinque mutanti in memoria respinti anche per stato o risultato: zero ignorato,
+  retirement che salta la validazione, validazione dopo lifecycle, assegnatario
+  inesistente accettato e lookup su None. Nessun mutante applicato al checkout.
+- Ratchet mirato origin/main PASS prima/dopo; merge-base `686e529e`. Globale
+  exit 2 per la stessa ambiguita Tributi `useEffect[0]<callback>`, 10 candidati.
+  Baseline/soglie/scope/eccezioni/matcher preservati; nessuna sync/verify.
+- Report completi 1.963 file: callable 22.636→22.637, Error 1.897 invariati,
+  Warning 2.950→2.949; cambia solo routes/devices.py, zero parse/exception error.
+  Dalla ripresa 23 slice: −21 Error, −24 Warning, −140 cognitiva aggregata.
+- Ruff runtime/test, format nuovo test, lint-backend 250 file e diff-check PASS.
+  Nessuna nuova failure applicativa; 98 warning JWT API preesistenti.
+  Graphify Network Make 485 nodi/1.212 archi; verifica platform docs nel checkpoint.
+  Rapporto `NETWORK_DEVICE_ASSIGNEE_2026-11-17.md`. Hash delle altre slice,
+  baseline e report condivisi preservati; modifiche concorrenti intatte.
+  Resta l'Error parametri get_devices. Nessun commit/push/merge/deploy o secondo
+  hotspot; programma generale ancora aperto.
+
+## 2026-11-17 — Applicazione campi bulk dispositivi Network
+
+- Turno precedente progresso verificato; singolo hotspot bulk_update_devices
+  in router/routes/devices.py, HEAD iniziale8f65d353. Prima cognitive/cyclomatic/
+  LOC/nesting18/12/28/2; file cognitiva37, due Warning nel callable.
+- Separare solo l'applicazione campi al dispositivo. Preservare auth/query,
+  letture ripetute payload e device.notes, strip note prima del ciclo, ordine
+  setattr/sync/add/commit/refresh/serializzazione, errori e risposta. Route
+  prevista5/6/23/1, helper8/7/9/1 sotto soglia; aggregati37→32cog, decisioni26
+  invariate. Modifiche concorrenti Communications/Ruolo/frontend preservate.
+- Nuovi test prima del runtime; artefatti isolati in
+  `/tmp/gaia-network-device-bulk-refactor-20261117/`.
+- `IMPROVED`: bulk cognitive/cyclomatic/LOC/nesting18/12/28/2→5/6/23/1;
+  helper8/7/9/1 sotto soglia. File cognitiva37→32, ciclomatica33→34,
+  callable7→8, decisioni26 invariate, LOC191→195. Error1 invariato,
+  Warning3→1: due Warning eliminati senza trasferire violation.
+- 92test PASS prima/dopo:50API,18helper e24nuovi casi. Zero skip/failure/error
+  nei due XML; full-file statement/branch100% prima92/92statement e30/30branch,
+  dopo94/94 e30/30, zero esclusioni/missing/partial. Nessun test esistente toccato.
+- Differenziale8000scenari equivalente per risposta ordinata completa, stato
+  parziale dei dispositivi, SQL/errori, letture ORM/payload e trace auth/setattr/
+  sync/add/commit/refresh/serialize. Sei altri AST, sette firme/return/decorator
+  e sette contratti route invariati; body helper AST identico ai tre if originali.
+  Cinque mutanti respinti: False ignorato, location vuota ignorata, lettura
+  payload accorpata, commit per dispositivo e strip note omessa.
+- Ratchet mirato origin/main PASS prima/dopo, merge-base686e529e; globale
+  exit2 stessa ambiguita Tributi useEffect[0]<callback>,10candidati. Baseline,
+  soglie/scope/eccezioni/matcher intatti; nessuna sync/verify dichiarata.
+- Report completi1963file, callable22635→22636, Error1897 invariati,
+  Warning2952→2950; varia solo routes/devices.py, zero parse/exception error.
+  Il file extra rispetto alla slice precedente e Communications concorrente,
+  gia presente nel report prima; non contato come modifica di questa slice.
+  Dalla ripresa ventidue slice: -21Error/-23Warning/-140cognitiva aggregata.
+- Ruff runtime/test, format nuovo test, lint-backend249file e diff-check PASS.
+  Nessuna failure applicativa nuova,98warning JWT API preesistenti. Graphify
+  Network Make484nodi/1210archi; platform docs e verifica chunk nel checkpoint.
+  Rapporto `NETWORK_DEVICE_BULK_2026-11-17.md`. Hash runtime finale, slice
+  precedenti, baseline e report condivisi preservati. Nessun commit/push/deploy
+  o secondo hotspot; residui file: parametri get_devices e ciclomatica patch.
+
+## 2026-11-17 — Decodifica risposta SNMP Network
+
+- Turno precedente progresso verificato; singolo hotspot `_snmp_get_values_async`
+  in sophos_snmp.py, HEAD iniziale8f65d353. Prima cognitive/cyclomatic/LOC/
+  nesting13/11/20/2; obiettivo Warning ciclomatico, non la LOC del summary.
+- Separare la decodifica var_binds dal trasporto. Preservare ordine await,
+  timeout/retry, short circuit errori, costruzione mappa OID dopo la risposta,
+  duplicati/ordine, key truthy, str(name) prima di str(value), errori e wrapper.
+  Candidato async9/8/14/1, helper4/4/8/2 sotto soglia; cognitiva aggregata70
+  e decisioni53 invariate. Nessuna riduzione aggregata di decisioni rivendicata.
+- Nuovi test prima del runtime; artefatti isolati in
+  `/tmp/gaia-network-snmp-response-refactor-20261117/`.
+- `IMPROVED` sulla ciclomatica obiettivo: async13/11/20/2→9/8/14/1,
+  decoder4/4/8/2 sotto soglia. File cognitiva70 invariata, ciclomatica63→64,
+  callable10→11, decisioni53 invariate, LOC188→190. Error1 invariato,
+  Warning2→1; nessuna violation trasferita o riduzione cognitiva aggregata.
+- 148test PASS prima/dopo,15casi nuovi, zero skip/failure/error nei due XML.
+  Full-file statement/branch100% prima119/119statement e44/44branch,
+  dopo121/121 e44/44; zero esclusioni, missing o branch parziali.
+- Differenziale12000scenari equivalente per valori ordinati, eccezioni,
+  costruttori, await, mutazioni OID e trace getitem/iter/str/bool. Nove altri
+  AST e dieci firme preservati; body decoder AST identico al blocco originale.
+  Cinque mutanti respinti: snapshot OID prematuro, key falsey accettata,
+  strip valore, primo duplicato prevalente, errori accettati se non entrambi.
+- Ratchet mirato origin/main PASS prima/dopo, merge-base686e529e; globale
+  exit2 stessa ambiguita Tributi useEffect[0]<callback>,10candidati. Nessuna
+  modifica baseline/soglie/scope/eccezioni/matcher o sync/verify dichiarata.
+- Report completi1962file: callable22631→22632, Error1897 invariati,
+  Warning2953→2952; solo sophos_snmp.py varia metriche, zero parse/exception
+  error. Dalla ripresa ventuno slice: -21Error/-21Warning/-135cognitiva aggregata.
+- Ruff runtime/test, format nuovo test, lint-backend246file e diff-check PASS.
+  Nessuna nuova failure applicativa,98warning JWT API preesistenti. Graphify
+  Network Make483nodi/1208archi; platform docs e verifica chunk nel checkpoint.
+  Rapporto `NETWORK_SNMP_RESPONSE_2026-11-17.md`. Hash delle slice precedenti,
+  runtime finale, baseline e report condivisi preservati. Nessun commit/push/
+  deploy o secondo hotspot; restano parametri record metric e Warning polling.
+
+## 2026-11-17 — Statistiche riepilogo attivita Network
+
+- Obiettivo ondate attivo, turno precedente progresso verificato. HEAD ora
+  b455aad1 per commit concorrenti delle slice precedenti; nessun commit creato
+  in questa sessione. Singolo hotspot summary48/25/121/3 in tracking.py.
+- Candidato: separare selezione SQL e stato dei contatori in un accumulatore
+  di statistiche; preservare ordine query/letture, matching, detection, byte,
+  Counter, first observed, dettagli e risposta. Tutti i nuovi callable sotto
+  soglia; builder previsto11/6/61/2: tre Error diventano un Warning LOC,
+  esplicitamente dichiarato, non un azzeramento dei warning.
+- Nuovi test prima del runtime; artefatti isolati in
+  `/tmp/gaia-network-activity-stats-refactor-20261117/`.
+- `IMPROVED`: builder cognitive/cyclomatic/LOC/nesting48/25/121/3→11/6/61/2;
+  query10/7/22/3, metodi stats al massimo cognitive9/cyclomatic7, tutti sotto
+  soglia. Aggregati tracking+stats cognitiva168→159, ciclomatica137→142,
+  callable22→27, decisioni115 invariate, LOC449→481(412+69). Error3→0,
+  Warning0→1 per LOC del builder: netto-2violation, non riduzione dei warning.
+- 261test PASS prima/dopo,13nuovi casi, zero skip/failure/error nei due XML.
+  Full-file statement/branch100%: prima tracking245/96; dopo tracking221/80
+  e stats44/16. Zero esclusioni/missing/partial branch su entrambi i runtime.
+- Differenziale8000scenari equivalente per payload completo, SQL, eccezioni,
+  clock e trace ordinato subject/event/get/str/matching/detection/traffic/label.
+  Ventuno altri AST e ventidue firme preservati; query AST identico, corpi di
+  tre metodi aggregati identici dopo rinomina locali→campi e passaggio event_type.
+  Cinque mutanti respinti: allow/block esclusivi, timestamp sovrascritto,
+  tag falsey conteggiati, top3 invece di top4, guardia IDdevice rimossa.
+- Ratchet mirato origin/main PASS prima/dopo, merge-base686e529e; globale
+  exit2 stessa ambiguita Tributi useEffect[0]<callback>,10candidati. Baseline,
+  soglie/scope/eccezioni intatti; nessuna sync/verify o modifica matcher.
+- Report completi1961→1962file, callable22626→22631, Error1900→1897,
+  Warning2952→2953. Solo i due runtime variano metriche, nessun parse/exception
+  error. Dalla ripresa venti slice: -21Error/-20Warning/-135cognitiva aggregata.
+- Ruff runtime/test, format file nuovi, lint-backend245file e diff-check PASS.
+  Nessuna failure applicativa nuova, warning JWT API preesistenti. Primo audit
+  AST richiedeva la normalizzazione aggiuntiva dell'argomento event_type:
+  corretta solo la prova, nessuna correzione runtime per renderla verde.
+- Graphify Network Make482nodi/1206archi; platform docs e verifica chunk nel
+  checkpoint finale. Rapporto `NETWORK_ACTIVITY_STATS_2026-11-17.md`.
+  Hash runtime finali, modulo ARP precedente, baseline e report condivisi
+  preservati. Nessun commit/push/deploy o secondo hotspot in questo turno.
+
 ## 2026-11-17 — Contatori traffico attivita soggetti Network
 
 - Obiettivo generale attivo: proseguire le ondate di riduzione. Turno precedente
