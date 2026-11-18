@@ -158,6 +158,11 @@ def recognized_extra_minutes(record: PresenzeDailyRecord, minutes: RecognizedOpe
 PENDING_PUNCH_REQUEST_SOURCE = "pending_punch_request"
 
 
+def effective_imported_extra_minutes(record: PresenzeDailyRecord) -> int | None:
+    """Manual overtime/MPE values override INAZ independently, including zero."""
+    return effective_extra_values(record, None)["effective_extra_minutes"]
+
+
 def effective_extra_values(record: PresenzeDailyRecord, classification: object) -> dict:
     if getattr(classification, "recognized_minutes", None) is not None:
         straordinario = max(0, record.override_straordinario_minutes or 0)
