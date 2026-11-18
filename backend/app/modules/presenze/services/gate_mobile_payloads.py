@@ -271,13 +271,19 @@ def build_presenze_mobile_record_payload(
         "missing_minutes": serialized.operational_missing_minutes,
         "absence_cause": serialized.resolved_absence_cause,
         **_record_request_values(serialized),
+        **_record_validation_values(record),
+        **_gate_record_feature_values(record),
+        **_canonical_export_values(record, classification),
+        **avventizio_absence_values(record, classification),
+    }
+
+
+def _record_validation_values(record: PresenzeDailyRecord) -> dict[str, Any]:
+    return {
         "validated_at": json_datetime(record.validated_at)
         if record.validated_at is not None
         else None,
         "validated_by_user_id": record.validated_by_user_id,
-        **_gate_record_feature_values(record),
-        **_canonical_export_values(record, classification),
-        **avventizio_absence_values(record, classification),
     }
 
 
