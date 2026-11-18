@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from types import SimpleNamespace
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatImportBatch
 from app.modules.catasto.services import import_shapefile as service
@@ -93,18 +95,21 @@ def test_drop_staging_table_and_apply_best_effort_settings() -> None:
     assert db.commits == 1
     assert 'DROP TABLE IF EXISTS "cat_stage"' in db.executed[0][0]
 
-    db2 = _FakeDb([_FakeResult(), _FakeResult()])
 
-    def execute_with_one_failure(statement, params=None):
-        sql = str(statement)
-        db2.executed.append((sql, params))
-        if "BAD" in sql:
-            raise RuntimeError("bad setting")
-        return _FakeResult()
+def test_optional_setting_uses_a_savepoint_per_attempt() -> None:
+    db = MagicMock(spec=Session)
+    conn = db.connection.return_value
+    error = ProgrammingError("SET LOCAL", {}, ValueError("invalid parameter"))
+    db.execute.side_effect = [None, error, None]
+    statements = ["SET LOCAL work_mem = '16MB'", "SET LOCAL bad = 1", "SET LOCAL jit = off"]
+    service._apply_best_effort_local_settings(db, statements)
 
-    db2.execute = execute_with_one_failure  # type: ignore[method-assign]
-    service._apply_best_effort_local_settings(db2, ["SET LOCAL ok = 1", "SET LOCAL BAD = 1"])
-    assert db2.rollbacks == 1
+    assert [str(call.args[0]) for call in db.execute.call_args_list] == statements
+    assert conn.begin_nested.call_count == len(statements)
+    assert [call.args[0] for call in conn.begin_nested.return_value.__exit__.call_args_list] == [
+        None, ProgrammingError, None,
+    ]
+    db.rollback.assert_not_called()
 
 
 def test_load_zip_to_staging_happy_path_and_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -175,7 +180,7 @@ def test_load_zip_to_staging_happy_path_and_failures(monkeypatch: pytest.MonkeyP
     assert progress[-1] == (8, 8)
 
     monkeypatch.setattr(service.os, "walk", lambda root: iter([(str(tmp_path), [], ["README.txt"])]))
-    with pytest.raises(ValueError, match="Nessun file .shp trovato"):
+    with pytest.raises(ValueError, match=r"Nessun file \.shp trovato"):
         service.load_zip_to_staging(_FakeDb([]), zip_bytes=zip_bytes)
 
     monkeypatch.setattr(service.os, "walk", lambda root: iter([(str(tmp_path / "shape"), [], ["test.shp"])]))

@@ -11,10 +11,19 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatDistretto, CatDistrettoGeometryVersion, CatImportBatch, CatParticella, CatParticellaHistory
+from app.models.catasto_phase1 import (
+    CatDistretto,
+    CatDistrettoGeometryVersion,
+    CatImportBatch,
+    CatParticella,
+    CatParticellaHistory,
+)
 from app.modules.catasto.routes.distretti import get_distretto_geojson
 from app.modules.catasto.services.import_distretti import finalize_distretti_shapefile_import
-from app.modules.catasto.services.import_shapefile import finalize_shapefile_import
+from app.modules.catasto.services.import_shapefile import (
+    _apply_best_effort_local_settings,
+    finalize_shapefile_import,
+)
 
 
 def _polygon_wkt(x0: float, y0: float) -> str:
@@ -59,6 +68,24 @@ def db_session(engine):
     session.close()
 
 
+def test_rejected_local_setting_preserves_batch_transaction(db_session: Session) -> None:
+    # PostgreSQL rejects a change to temp_buffers once this connection has used a temp table.
+    db_session.execute(text("CREATE TEMP TABLE cat_batch_probe (id int) ON COMMIT DROP"))
+    db_session.execute(text("INSERT INTO cat_batch_probe VALUES (1)"))
+    current_buffers = db_session.scalar(text("SELECT setting::int FROM pg_settings WHERE name = 'temp_buffers'"))
+    _apply_best_effort_local_settings(
+        db_session,
+        [
+            "SET LOCAL work_mem = '16MB'",
+            f"SET LOCAL temp_buffers = {current_buffers + 1}",
+            "SET LOCAL lock_timeout = '3s'",
+        ],
+    )
+    assert db_session.scalar(text("SELECT id FROM cat_batch_probe")) == 1
+    assert db_session.scalar(text("SHOW work_mem")) == "16MB"
+    assert db_session.scalar(text("SHOW lock_timeout")) == "3s"
+
+
 def _created_by(db: Session) -> int:
     user_id = db.execute(select(func.min(ApplicationUser.id))).scalar_one_or_none()
     if user_id is None:
@@ -79,7 +106,7 @@ def _cleanup_shapefile_artifacts(db: Session, *, staging_table: str, num_distret
             {"num_distretto": num_distretto},
         )
     db.execute(
-        delete_stmt := text(
+        text(
             """
             DELETE FROM cat_particelle_history
             WHERE num_distretto = :num_distretto
@@ -103,7 +130,10 @@ def _cleanup_shapefile_artifacts(db: Session, *, staging_table: str, num_distret
     db.commit()
 
 
-def test_finalize_shapefile_import_inserts_current_particelle_without_touching_distretti(db_session: Session) -> None:
+@pytest.mark.parametrize("staging_srid", [4326, 7791])
+def test_finalize_shapefile_import_inserts_current_particelle_without_touching_distretti(
+    db_session: Session, staging_srid: int,
+) -> None:
     suffix = uuid4().hex[:8]
     staging_table = f"cat_particelle_staging_it_{suffix}"
     num_distretto = f"9{suffix[:3]}"
@@ -129,13 +159,12 @@ def test_finalize_shapefile_import_inserts_current_particelle_without_touching_d
               supe_part text,
               num_dist text,
               nome_dist text,
-              wkb_geometry geometry(MULTIPOLYGON, 4326)
+              wkb_geometry geometry(MULTIPOLYGON)
             )
             '''
         )
     )
     geometry_wkt = _polygon_wkt(8.58, 39.78)
-    new_geometry_wkt = _polygon_wkt(8.59, 39.79)
     db_session.execute(
         text(
             f'''
@@ -143,7 +172,7 @@ def test_finalize_shapefile_import_inserts_current_particelle_without_touching_d
               nume_fogl, nume_part, suba_part, cfm, supe_part, num_dist, nome_dist, wkb_geometry
             ) VALUES (
               :foglio, :particella, '1', 'A357-ITEST', '1234.50', :num_distretto, 'Distretto test {suffix}',
-              ST_GeomFromText(:wkt, 4326)
+              ST_Transform(ST_GeomFromText(:wkt, 4326), :srid)
             )
             '''
         ),
@@ -152,6 +181,7 @@ def test_finalize_shapefile_import_inserts_current_particelle_without_touching_d
             "particella": particella,
             "num_distretto": num_distretto,
             "wkt": geometry_wkt,
+            "srid": staging_srid,
         },
     )
     db_session.commit()
@@ -160,6 +190,7 @@ def test_finalize_shapefile_import_inserts_current_particelle_without_touching_d
         result = finalize_shapefile_import(
             db_session,
             created_by=_created_by(db_session),
+            source_srid=staging_srid,
             staging_table=staging_table,
         )
 
@@ -288,6 +319,7 @@ def test_finalize_distretti_shapefile_import_upserts_current_geometry_and_versio
         result = finalize_distretti_shapefile_import(
             db_session,
             created_by=_created_by(db_session),
+            source_srid=4326,
             staging_table=staging_table,
         )
 
@@ -383,6 +415,7 @@ def test_finalize_distretti_shapefile_import_inserts_new_distretto_and_tracks_mi
         result = finalize_distretti_shapefile_import(
             db_session,
             created_by=_created_by(db_session),
+            source_srid=4326,
             staging_table=staging_table,
         )
 
@@ -502,6 +535,7 @@ def test_finalize_shapefile_import_allows_progress_updates_from_separate_session
         result = finalize_shapefile_import(
             db_session,
             created_by=_created_by(db_session),
+            source_srid=4326,
             staging_table=staging_table,
             batch_id=batch.id,
             filename=staging_table,
@@ -620,6 +654,7 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
         result = finalize_shapefile_import(
             db_session,
             created_by=_created_by(db_session),
+            source_srid=4326,
             staging_table=staging_table,
         )
 
@@ -752,7 +787,6 @@ def test_distretto_geojson_route_returns_404_when_geometry_is_missing(db_session
 def test_finalize_shapefile_import_excludes_fd_distretto_from_upsert(db_session: Session) -> None:
     suffix = uuid4().hex[:8]
     staging_table = f"cat_particelle_staging_it_{suffix}"
-    num_distretto = "FD"
     foglio = f"5{suffix[:2]}"
     particella = f"6{suffix[2:5]}"
 
@@ -815,6 +849,7 @@ def test_finalize_shapefile_import_excludes_fd_distretto_from_upsert(db_session:
         result = finalize_shapefile_import(
             db_session,
             created_by=_created_by(db_session),
+            source_srid=4326,
             staging_table=staging_table,
         )
         assert result["status"] == "completed"
@@ -931,6 +966,7 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_reference_dataset(db_
         result = finalize_shapefile_import(
             db_session,
             created_by=_created_by(db_session),
+            source_srid=4326,
             staging_table=staging_table,
         )
         assert result["status"] == "completed"
@@ -1043,6 +1079,7 @@ def test_finalize_shapefile_import_writes_history_when_only_geometry_changes(db_
         result = finalize_shapefile_import(
             db_session,
             created_by=_created_by(db_session),
+            source_srid=4326,
             staging_table=staging_table,
         )
 

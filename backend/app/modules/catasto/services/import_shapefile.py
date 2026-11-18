@@ -1,22 +1,24 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import date, datetime, timezone
 import io
 import os
 import re
 import subprocess
 import tempfile
+import zipfile
+from collections.abc import Callable
+from contextlib import suppress
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID, uuid4
-import zipfile
 
-from sqlalchemy.engine import make_url
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DataError, ProgrammingError
 from sqlalchemy.orm import Session
 
-from app.models.catasto_phase1 import CatImportBatch
 from app.core.config import settings
+from app.models.catasto_phase1 import CatImportBatch
 from app.modules.catasto.services.comuni_reference import (
     get_capacitas_code_by_catastale,
     get_official_name_by_catastale,
@@ -86,15 +88,12 @@ def load_zip_to_staging(
 
         shp_filename = os.path.basename(shp_path)
 
-        total = 0
-        for enc in ("utf-8", "latin-1"):
-            try:
-                with pyshp.Reader(shp_path, encoding=enc) as sf:
-                    total = len(sf)
-                break
-            except Exception:
-                if enc == "latin-1":
-                    raise
+        try:
+            with pyshp.Reader(shp_path, encoding="utf-8") as sf:
+                total = len(sf)
+        except Exception:
+            with pyshp.Reader(shp_path, encoding="latin-1") as sf:
+                total = len(sf)
         if progress_callback:
             progress_callback(0, total)
 
@@ -162,10 +161,8 @@ def _escape_sql_string(value: str) -> str:
 
 def _apply_best_effort_local_settings(db: Session, statements: list[str]) -> None:
     for statement in statements:
-        try:
+        with suppress(DataError, ProgrammingError), db.connection().begin_nested():
             db.execute(text(statement))
-        except Exception:
-            db.rollback()
 
 
 def finalize_shapefile_import(
@@ -195,7 +192,7 @@ def finalize_shapefile_import(
     """
     if batch_id is None:
         batch_id = uuid4()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     codice_by_catastale = get_capacitas_code_by_catastale()
     nome_by_catastale = get_official_name_by_catastale()
     mapping_rows_sql = ",\n        ".join(
