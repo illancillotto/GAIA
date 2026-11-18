@@ -124,6 +124,9 @@ jobs:
 
       - name: Worker tests with isolated collection and coverage
         env:
+          APP_ENV: test
+          DATABASE_URL: "sqlite://"
+          JWT_SECRET_KEY: ci-worker-test-key
           POSTE_TEST_DATABASE_URL: ${{ env.GAIA_TEST_POSTGRES_URL }}
         run: make test-worker WORKER_PYTHON=python
 
