@@ -8,8 +8,8 @@ from app.modules.presenze.services.inaz_assigned_calendar import (
     is_inaz_monthly_calendar,
 )
 from app.modules.presenze.services.operai_daily_policy import (
+    AssignedDaySchedule,
     _complete_day_pairs,
-    assigned_daily_start,
     recognized_daily_minutes,
 )
 from app.modules.presenze.services.operai_recognized_minutes import RecognizedOperaiMinutes
@@ -56,21 +56,20 @@ def resolve_individual_operai_rule(collaborator, record, configs, individual_sat
     return resolve_operai_rule(collaborator, scheduled_record, configs)
 
 
-def build_operai_day_policy(rule, record, punches, matched_rules, individual_saturday, template_code=None):
+def build_operai_day_policy(rule, record, punches, schedule: AssignedDaySchedule, individual_saturday):
     if rule is None:
         return OperaiDayPolicy(None)
     if individual_saturday:
-        scheduled = bool(matched_rules)
+        scheduled = bool(schedule.matched_rules)
         minutes = SUMMER_SATURDAY_MINUTES.get(
-            rule.formula_code, assigned_saturday_minutes(rule, matched_rules)
+            rule.formula_code, assigned_saturday_minutes(rule, schedule.matched_rules)
         )
         rule = replace(
             rule, expected_minutes=minutes if scheduled else 0, saturday_is_scheduled=scheduled
         )
     if individual_saturday and rule.expected_minutes == 0:
         return OperaiDayPolicy(rule, _recognize_unscheduled_saturday(punches), True)
-    starts = {item.start_time for item in matched_rules}
-    start = assigned_daily_start(record, rule, starts, template_code)
+    start = schedule.start_for(record, rule)
     return OperaiDayPolicy(
         rule,
         recognized_daily_minutes(punches, rule, scheduled_start=start),

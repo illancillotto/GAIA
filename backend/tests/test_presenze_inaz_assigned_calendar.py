@@ -9,6 +9,7 @@ from app.modules.presenze.services.inaz_assigned_calendar import (
     assigned_saturday_minutes,
     is_inaz_monthly_calendar,
 )
+from app.modules.presenze.services.operai_daily_policy import AssignedDaySchedule
 from app.modules.presenze.services.operai_rules import resolve_operai_rule
 from app.modules.presenze.services.operai_schedule_policy import (
     build_operai_day_policy,
@@ -52,7 +53,7 @@ def test_first_and_third_saturday_have_six_and_a_half_hours_without_hr_group(day
     )
     assert has_individual_saturday(record, template, [monthly])
     rule = resolve_individual_operai_rule(collaborator, record, None, True)
-    policy = build_operai_day_policy(rule, record, [], [monthly] if expected else [], True)
+    policy = build_operai_day_policy(rule, record, [], AssignedDaySchedule(template, [monthly] if expected else []), True)
     assert policy.rule.expected_minutes == expected
     assert policy.rule.saturday_is_scheduled is bool(expected)
     assert policy.individual_saturday

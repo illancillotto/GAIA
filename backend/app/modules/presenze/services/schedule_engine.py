@@ -25,6 +25,7 @@ from app.modules.presenze.services.inaz_minute_buckets import (
 )
 from app.modules.presenze.services.operai_daily_policy import (
     PENDING_PUNCH_REQUEST_SOURCE,
+    AssignedDaySchedule,
     effective_extra_values,
 )
 from app.modules.presenze.services.operai_rules import (
@@ -173,7 +174,7 @@ def classify_daily_record(
     individual_saturday = has_individual_saturday(record, template, rules)
     policy = build_operai_day_policy(
         resolve_individual_operai_rule(collaborator, record, context.operai_rule_configs if context else None, individual_saturday),
-        record, punches, matched_rules, individual_saturday, template.code if template else None,
+        record, punches, AssignedDaySchedule(template, matched_rules), individual_saturday,
     )
     operai_quality = evaluate_operai_operational_quality(
         collaborator,

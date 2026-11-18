@@ -14,6 +14,7 @@ from test_presenze_meal_vouchers import _record
 from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyRecord
 from app.modules.presenze.personnel_profile_models import PresenzePersonnelProfile
 from app.modules.presenze.services.gate_mobile_payloads import _gate_record_feature_values
+from app.modules.presenze.services.operai_daily_policy import AssignedDaySchedule
 from app.modules.presenze.services.operai_rules import resolve_operai_rule
 from app.modules.presenze.services.operai_schedule_policy import build_operai_day_policy
 from app.modules.presenze.services.personnel_profiles import (
@@ -79,7 +80,7 @@ def test_only_first_and_third_saturday_for_technicians(work_date, expected, sche
     assert rule.rule.operai_group == "tecnico_turnista"
     # A stale individual alternating-week template cannot turn 2/4/5 into workdays.
     assert individual_saturday_eligible(record, SimpleNamespace(is_active=True)) is False
-    policy = build_operai_day_policy(rule, record, [], [SimpleNamespace(start_time=None)], False)
+    policy = build_operai_day_policy(rule, record, [], AssignedDaySchedule(None, [SimpleNamespace(start_time=None)]), False)
     assert policy.rule.expected_minutes == expected
     assert policy.individual_saturday is False
 

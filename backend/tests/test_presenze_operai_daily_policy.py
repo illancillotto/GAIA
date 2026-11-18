@@ -15,7 +15,7 @@ from app.modules.presenze.models import (
 )
 from app.modules.presenze.services.gate_mobile_payloads import presenze_extra_minutes
 from app.modules.presenze.services.operai_daily_policy import (
-    assigned_daily_start,
+    AssignedDaySchedule,
     effective_extra_values,
     recognized_daily_minutes,
 )
@@ -121,15 +121,20 @@ def test_imported_six_to_thirteen_day_overrides_different_generic_calendar(exit_
 def test_same_or_unrecognized_template_preserves_attested_assignment(template):
     collaborator, record, _ = _day("OPE0613")
     rule = resolve_operai_rule(collaborator, record)
-    assert assigned_daily_start(record, rule, {time(5, 30)}, template) == time(5, 30)
-    assert assigned_daily_start(record, rule, set(), template) is None
+    calendar = PresenzeScheduleTemplate(code=template)
+    matched = PresenzeScheduleRule(start_time=time(5, 30))
+    assert AssignedDaySchedule(calendar, [matched]).start_for(record, rule) == time(5, 30)
+    assert AssignedDaySchedule(calendar, []).start_for(record, rule) is None
 
 
 def test_different_weekday_code_does_not_rewrite_an_individual_saturday_calendar():
     collaborator, record, _ = _day("OPE0613")
     record.work_date = date(2026, 10, 17)
     rule = resolve_operai_rule(collaborator, record)
-    assert assigned_daily_start(record, rule, {time(5, 30)}, "OPE0714_1E3SAB") == time(5, 30)
+    schedule = AssignedDaySchedule(
+        PresenzeScheduleTemplate(code="OPE0714_1E3SAB"), [PresenzeScheduleRule(start_time=time(5, 30))]
+    )
+    assert schedule.start_for(record, rule) == time(5, 30)
 
 
 @pytest.mark.parametrize(

@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import time
 
-from app.modules.presenze.models import PresenzeDailyPunch, PresenzeDailyRecord
+from app.modules.presenze.models import (
+    PresenzeDailyPunch,
+    PresenzeDailyRecord,
+    PresenzeScheduleRule,
+    PresenzeScheduleTemplate,
+)
 from app.modules.presenze.services.impiegati_pending_overtime import effective_inaz_mpe_minutes
 from app.modules.presenze.services.operai_recognized_minutes import (
     DayMinuteInterval,
@@ -37,25 +43,35 @@ SCHEDULE_FORMULA = re.compile(
 )
 
 
-def assigned_daily_start(record, rule, starts, template_code=None):
-    # The effective schedule of this imported day supersedes a generic
-    # seasonal template (which may still contain the 05:30 summer shift).
-    payload = record.raw_payload_json
-    if isinstance(payload, dict):
-        detail = extract_detail_payload(payload)
-        effective_code = parse_schedule_code_from_detail(detail.get("effective_schedule"))
-        if effective_code == rule.formula_code:
+@dataclass(frozen=True)
+class AssignedDaySchedule:
+    """Template and rules that actually matched the imported work day."""
+
+    template: PresenzeScheduleTemplate | None
+    matched_rules: list[PresenzeScheduleRule]
+
+    def start_for(self, record: PresenzeDailyRecord, rule: ResolvedOperaiRule) -> time | None:
+        if _effective_schedule_matches(record.raw_payload_json, rule.formula_code):
             return None
-    # A recognized code on the imported day supersedes a *different* generic
-    # template (Loi, 14/10: OPE0613 versus OPE0714_1E3SAB), even if the detail
-    # page timed out. An assignment of the same code can still attest a
-    # seasonal/custom start. Never infer a schedule from the punch times.
-    template_formula = SCHEDULE_FORMULA.match(template_code or "")
-    if (record.work_date.weekday() < 5 and template_formula is not None
-            and rule.formula_code in SCHEDULE_STARTS
-            and template_formula[1] != rule.formula_code):
-        return None
-    return next(iter(starts)) if len(starts) == 1 else None
+        if self._weekday_formula_conflicts(record, rule.formula_code):
+            return None
+        starts = {item.start_time for item in self.matched_rules}
+        return next(iter(starts)) if len(starts) == 1 else None
+
+    def _weekday_formula_conflicts(self, record: PresenzeDailyRecord, formula: str) -> bool:
+        # Saturday assignments and custom templates retain their own start.
+        if record.work_date.weekday() >= 5 or formula not in SCHEDULE_STARTS:
+            return False
+        code = getattr(self.template, "code", None)
+        match = SCHEDULE_FORMULA.match(code or "")
+        return match is not None and match[1] != formula
+
+
+def _effective_schedule_matches(payload: object, formula: str) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    detail = extract_detail_payload(payload)
+    return parse_schedule_code_from_detail(detail.get("effective_schedule")) == formula
 
 
 def recognized_daily_minutes(
