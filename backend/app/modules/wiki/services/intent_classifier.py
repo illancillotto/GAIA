@@ -6,7 +6,7 @@ from typing import Literal
 WikiIntent = Literal["docs_only", "live_data", "logic"]
 
 _DOCS_HINTS = [
-    r"\bcos['’]e\b",
+    r"\bcos['’]e\b",  # noqa: RUF001 - Match both ASCII and typographic apostrophes.
     r"\bdocumentazione\b",
     r"\bwiki\b",
     r"\bmanuale\b",
@@ -134,8 +134,6 @@ def classify_intent(question: str) -> WikiIntent:
 
     if logic_score > 0:
         return "logic"
-    if live_score > docs_score and live_score > 0:
+    if live_score > docs_score:
         return "live_data"
-    if docs_score > 0:
-        return "docs_only"
     return "docs_only"
