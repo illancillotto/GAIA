@@ -12,8 +12,7 @@ def run_tool(*args, cwd=ROOT):
         [sys.executable, str(TOOL), *args],
         cwd=cwd,
         text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
 
 
@@ -22,7 +21,7 @@ def write(path: Path, text: str):
     path.write_text(text)
 
 
-def test_baseline_verify_ignores_nested_provenance_source_commit(tmp_path):
+def test_baseline_verify_accepts_same_sources_from_another_checkout(tmp_path):
     source = tmp_path / "backend/app/example.py"
     write(source, "def ok(x):\n    return x + 1\n")
     baseline = tmp_path / "baseline.json"
@@ -31,6 +30,7 @@ def test_baseline_verify_ignores_nested_provenance_source_commit(tmp_path):
     data = json.loads(baseline.read_text())
     data["source_commit"] = "old-head"
     data["provenance"]["source_commit"] = "old-head"
+    data["provenance"]["repo_root"] = "/another/worktree"
     data["engines"]["python"]["runtime"] = "different-local-runtime"
     data["engines"]["javascript"]["runtime"] = "different-node-runtime"
     baseline.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
@@ -49,6 +49,7 @@ def test_baseline_verify_detects_real_source_change_after_metadata_normalization
     data = json.loads(baseline.read_text())
     data["source_commit"] = "old-head"
     data["provenance"]["source_commit"] = "old-head"
+    data["provenance"]["repo_root"] = "/another/worktree"
     baseline.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
     write(source, "def ok(x):\n    if x:\n        return x + 1\n    return 0\n")

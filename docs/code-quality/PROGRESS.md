@@ -12647,3 +12647,13 @@ Il ratchet globale sulla baseline del merge-base passa prima della
 sincronizzazione. Le soglie, le eccezioni e il matcher sono quelli della
 candidata iniziale. La riorganizzazione dei modelli giornalieri è classificata
 `REORGANIZED_AND_CHARACTERIZED`.
+
+### 2026-11-18 — riproducibilità della baseline fra worktree e runner CI
+
+Il controllo ospitato del refactor ha superato ratchet e check, poi ha
+rifiutato la baseline prodotta in un’altra directory. La prova di regressione
+riproduce il problema variando `provenance.repo_root`. Il verificatore conserva
+il percorso nel report e confronta gli stessi sorgenti in checkout differenti.
+Il controtest modifica il sorgente insieme ai metadati e richiede exit 1.
+La modifica è circoscritta alla verifica di riproducibilità. Le regole del
+ratchet, le soglie e le eccezioni sono quelle già verificate.

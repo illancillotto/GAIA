@@ -80,6 +80,11 @@ Ogni callable registra:
 Il formato reale puo aggiungere campi, ma non puo omettere provenance, versioni
 dei motori e identita strutturale.
 
+Il rapporto registra il percorso assoluto del checkout in `provenance.repo_root`.
+`baseline-verify` ammette directory di checkout diverse e confronta i percorsi
+relativi dei file, il perimetro, i callable e le metriche. La riproducibilità è
+verificata sia su una seconda directory sia con una variazione reale del sorgente.
+
 ## Matching
 
 Ordine:

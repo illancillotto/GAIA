@@ -1513,6 +1513,7 @@ def cmd_baseline_verify(args):
         provenance = d.get("provenance")
         if isinstance(provenance, dict):
             provenance.pop("source_commit", None)
+            provenance.pop("repo_root", None)
         engines = d.get("engines")
         if isinstance(engines, dict):
             for engine in engines.values():
