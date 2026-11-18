@@ -1722,7 +1722,7 @@ describe("Presenze collaborator detail", () => {
     expect(
       await screen.findByText("Profilo GAIA e template orari"),
     ).toBeInTheDocument();
-    expect(getTemplateSelect()).toHaveValue("10");
+    await waitFor(() => expect(getTemplateSelect()).toHaveValue("10"));
     fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
       target: { value: "GAIA_IMPIEGATI" },
     });
