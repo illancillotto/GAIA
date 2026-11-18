@@ -2,36 +2,50 @@
 
 ## Comportamento implementato
 
-In `/ruolo/tributi`, `Elenco tributi` presenta insieme i periodi dei gestori,
-il campo `Anno tributario` e `Solo non pagati (anche parziali)`:
+Stato locale aggiornato al 12 novembre 2026. La pubblicazione resta subordinata
+alle verifiche finali riportate in fondo; le evidenze del 19 ottobre descrivono
+le release precedenti.
+
+In `/ruolo/tributi`, `Elenco tributi` presenta `Anno tributario`,
+`Solo non pagati (anche parziali)` e i pulsanti dello stato pagamento.
+L'anno e il filtro principale: quattro cifre applicano una singola annualita;
+il campo vuoto comprende tutti gli anni e tutte le tipologie. I caratteri non
+numerici sono rimossi e un valore incompleto non avvia una nuova ricerca.
+La modifica del filtro riporta alla pagina 1 e mantiene gli altri criteri.
+
+I pulsanti dei periodi gestore e le scorciatoie riservate a Consorzio/GAIA sono
+rimossi. Il riepilogo delle regole conserva le etichette configurate, fra cui:
 
 - fino al 2017: Agenzia delle Entrate;
-- 2018–2021: STEP;
-- dal 2022: Consorzio/GAIA, selezione iniziale.
+- 2018–2021: STEP - Agenzia recupero crediti;
+- 2021: Anno 2021 - avvisi non notificati;
+- dal 2022: Consorzio/GAIA.
 
-I periodi provengono dalle regole gestori attive; le date non sono duplicate
-nelle definizioni dei periodi UI. Anno vuoto significa intero periodo. Un anno completo
-restringe il periodo; cambiarlo riparte dalla prima pagina. Se si cambia
-gestore, l'anno viene svuotato per evitare intersezioni involontariamente vuote.
+Ogni avviso conserva la propria `annuality_manager_label` restituita dal
+backend. Il frontend non deduce la tipologia dall'anno: avvisi STEP e avvisi
+2021 non notificati possono comparire nella stessa ricerca.
 
-Con Consorzio/GAIA selezionato, il campo anno e affiancato dai pulsanti
-2022, 2023, 2024, 2025 e `Tutti gli anni`. Le quattro scorciatoie sono quelle
-richieste, non una discovery delle annualita presenti ne un limite al campo
-manuale. I pulsanti condividono `anno`, espongono `aria-pressed` e non cambiano
-il filtro saldo. `Tutti gli anni` svuota l'anno; negli altri periodi il gruppo
-non e visualizzato. Nessuna nuova API o selezione multipla.
+Lista e KPI condividono anno, ricerca, comune, stato pagamento, workflow,
+filtro saldo e collegamento anagrafico. La pagina non legge piu `manager_key`
+dai link legacy e non lo invia alle API; una successiva modifica dei filtri
+lo elimina dall'URL. Anche candidati e generazione del wizard usano gli anni
+selezionati senza ereditare un filtro gestore invisibile. L'API conserva il
+parametro opzionale per gli altri client; nessun contratto backend cambia.
 
-Il filtro saldo riusa `open_only`, attivo per default. Include non pagati,
-parziali e saldi non determinabili da verificare; esclude saldati ed eccedenze.
-La nota accanto al controllo esplicita i casi da verificare. Attivandolo si
-azzera `payment_status`, per non mantenere un precedente filtro `paid` o
-`unpaid` che escluderebbe gli altri scoperti. Disattivandolo si torna allo
-storico del periodo. Gli altri filtri restano disponibili.
+`open_only` resta attivo per default: include non pagati, parziali e saldi
+indeterminati da verificare; esclude saldati ed eccedenze. Attivandolo vengono
+rimossi gli stati incompatibili (es. `paid`), preservando `unpaid` o `partial`
+se scelti esplicitamente. I pulsanti `Tutti gli stati`, `Non pagati` e
+`Pagamenti parziali` restano indipendenti dall'anno.
 
-URL, paginazione e KPI utilizzano gli stessi parametri API. Il componente
-`list-filters.tsx` riunisce la UI dei periodi e i due controlli; la pagina
-mantiene stato, debounce, richieste e autorizzazioni. Nessuna modifica a schema,
-calcolo del saldo, backend runtime o scrittura di dati di produzione.
+`list-filters.tsx` contiene anno e controlli di pagamento; la pagina mantiene
+stato, debounce, richieste e autorizzazioni. Regole dei gestori, calcoli,
+permessi e dati di produzione non vengono modificati.
+
+## Evidenze storiche — 19 ottobre 2026
+
+Le sezioni seguenti documentano i precedenti filtri per periodo, sostituiti
+dal comportamento sopra descritto. Non sono prove della candidata di novembre.
 
 ## Prove pertinenti
 
@@ -202,3 +216,139 @@ Solo `gaia-frontend` ricreato; tutti gli altri ID container invariati, candidato
 temporaneo rimosso e rollback conservato. Il checkout remoto sporco non e stato
 modificato. Nessuna nuova failure o parte runtime modificata non coperta nei
 controlli finali; rimangono i limiti preesistenti gia dichiarati.
+
+## Verifica finale candidata — 12 novembre 2026
+
+Perimetro: `frontend/src/app/ruolo/tributi/page.tsx`, `list-filters.tsx`,
+la suite unit della pagina e le prove browser anno/gestori sovrapposti.
+Checkout isolato da `5f50a349`, con overlay dei soli file del ciclo e
+collegamento all'installazione locale delle dipendenze. Le modifiche
+concorrenti alle particelle e alla configurazione non sono incluse.
+
+### Comportamenti verificati
+
+- Anno completo/incompleto, pulizia input, annualita 2017/2019/2021/2024/2026,
+  anno da URL, cancellazione anno e ritorno alla pagina 1.
+- Ricerca e stato pagamento preservati; stato incompatibile rimosso quando
+  si riattiva il filtro saldo. Lista e KPI ricevono gli stessi criteri.
+- Link legacy STEP/GAIA/AdE senza restrizioni nascoste su lista e KPI;
+  il cambio filtri rimuove `manager_key` dall'URL.
+- Due avvisi 2021 con etichette STEP e non notificati restano distinguibili;
+  le etichette non diventano pulsanti di selezione della tipologia.
+- Candidati e batch wizard non ereditano il gestore dal vecchio URL.
+- Configurazione gestore 2021: errore salvataggio, form preservato, retry,
+  etichetta aggiornata e selezione anno nel wizard.
+- Anteprima privata PDF 2022 preservata, compreso errore/retry e download
+  esplicito, senza invio di comunicazioni reali.
+
+I nuovi test verificano interazioni e richieste osservabili; nessun test
+aggiunto soltanto per incrementare la coverage e nessuna nuova esclusione.
+
+### Esiti
+
+| Verifica | Esito |
+| --- | --- |
+| Intera suite unit frontend | 5.711 PASS in 367 file, zero failure/skip |
+| Smoke frontend | 18 PASS |
+| E2E Chromium, 1440 e 390 px | 6 PASS; screenshot ispezionati |
+| Build produzione | PASS, 196 route generate |
+| TypeScript | PASS |
+| ESLint perimetro | 0 errori; un warning hook preesistente |
+| Coverage statement | 646/646, 100% |
+| Coverage branch | 626/626, 100% |
+| Coverage funzioni | 204/204, 100% |
+| Coverage righe | 586/586, 100% |
+| Ratchet autorevole contro `main` | BLOCCATO: `ambiguous_identity` |
+| Diff whitespace | PASS |
+
+La coverage misura entrambi i file runtime interi secondo la configurazione
+esistente, incluse le direttive `c8 ignore` legacy gia presenti nella pagina;
+non certifica quei rami esclusi. Tutto il codice di questo delta e esercitato;
+non sono state introdotte o ampliate esclusioni. Restano i warning ESLint
+legacy della build e quello sulle dipendenze di `refreshCalculationPolicies`
+e `refreshYearManagers`, riprodotto nel sorgente precedente.
+
+La prima corsa E2E ha avuto 4 PASS e 2 failure nel nuovo test: il selettore
+per assenza dei vecchi pulsanti gestore includeva anche la riga avviso
+cliccabile, che contiene l'etichetta STEP. Il test ora identifica i nomi
+completi dei periodi. Ripetizione dei sei scenari: 6 PASS, runtime invariato.
+I messaggi jsdom `Not implemented: navigation to another Document` nella suite
+completa non hanno prodotto failure. Il server di verifica e stato avviato con
+`next start`; il warning relativo a `output: standalone` resta distinto dalla
+build di produzione superata.
+
+### Complessita e blocco di rilascio
+
+| Unita | Cognitiva prima/dopo | Ciclomatica prima/dopo | LOC prima/dopo |
+| --- | --- | --- | --- |
+| `RuoloTributiPageContent` | 195 / 193 | 169 / 167 | 1041 / 1027 |
+| `TributiListFilters` | 0 / 0 | 1 / 1 | 27 / 14 |
+| `AnnualityYearFilter` | 2 / 0 | 3 / 1 | 37 / 22 |
+| Callback autoapplicazione filtri | 13 / 12 | 12 / 11 | 29 / 27 |
+
+Le somme file diminuiscono: pagina cognitiva 636 -> 633, ciclomatica
+758 -> 755; filtri 13 -> 7 e 26 -> 11. Il debito legacy della pagina resta
+visibile: LOC file 2854 -> 2836, `useState` 25 -> 24, `useEffect` 10 invariati.
+Nel perimetro restano 20 finding error e 11 warning gia presenti; nessuna
+baseline o soglia e stata modificata per nasconderli.
+
+Il ratchet legge la baseline del merge-base `686e529e` (sorgenti baseline
+`bdb41d8a`) e si ferma su `useEffect[0]<callback>`. Il replay dei sorgenti
+precedenti passa; il problema quindi non e dichiarato preesistente. I confini
+della callback corrente 466–495 mappano a 473–504 e le metriche calano, ma
+manca l'ancora esterna precedente richiesta dal verificatore, a causa della
+rimozione del gestore dalle dipendenze dell'effetto adiacente. Anche il
+confronto diagnostico con una baseline del solo stato precedente riproduce
+l'ambiguita: rigenerare la baseline non risolve il problema.
+
+La corrispondenza diagnostica non equivale al PASS del gate. Nessun cambio
+al matcher, eccezione, rinomina o codice artificiale e stato introdotto per
+aggirarlo. La candidata resta **BLOCCATA per commit e deploy**, in conformita
+alla richiesta di pubblicare solo dopo il superamento di tutti i controlli.
+Serve una decisione separata sul trattamento della provenienza nel controllo
+di complessita; le verifiche funzionali non la sostituiscono.
+
+### Riproduzione e artefatti
+
+Nel checkout isolato `/tmp/gaia-tributi-final-20261112`, frontend:
+
+```sh
+VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/page.tsx,src/app/ruolo/tributi/list-filters.tsx npm run test:coverage -- --maxWorkers=2
+npm test
+npm run build
+npm run typecheck
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:3312 npm run test:e2e -- tests/e2e/ruolo-tributi-year-filter.spec.ts tests/e2e/ruolo-2021-overlap.spec.ts tests/e2e/ruolo-tributi-draft-preview.spec.ts --workers=1
+```
+
+Il comando E2E richiede il frontend candidato avviato sulla porta indicata;
+tutte le API sono intercettate con fixture, senza letture o scritture reali.
+Dalla root, controllo e aggiornamento grafi tramite i target supportati:
+
+```sh
+python3 tools/code_quality/complexity.py ratchet --base-ref main frontend/src/app/ruolo/tributi/page.tsx frontend/src/app/ruolo/tributi/list-filters.tsx
+make graphify-patch-force-pruning
+make graphify-frontend GRAPHIFY_CODE_FLAGS=--force
+make graphify-ruolo-docs
+```
+
+Artefatti locali del ciclo: `/tmp/gaia-tributi-final-{full-tests,build,eslint,e2e-verified}.log`,
+`/tmp/gaia-tributi-final-full-coverage/`, `/tmp/gaia-tributi-final-e2e-verified/`,
+`/tmp/gaia-tributi-final-{ratchet,ambiguity,metrics}.json`.
+Grafi ignorati da Git. Non e stato eseguito alcun commit, push o deploy;
+il preflight sul CED si limita alla lettura dello stato frontend.
+
+## Verifica nella candidata del 18 novembre 2026
+
+La pagina usa lo stesso tipo per i filtri letti dall’URL e per quelli in
+modifica. Il confronto tra le due query normalizzate decide se avviare il timer
+di navigazione di 350 ms. Il cambio di filtro riparte da pagina 1.
+L’autosubmit conserva le soglie per testo e anno e annulla il timer al cambio
+dei parametri o allo smontaggio.
+
+Sul target `686e529e` il ratchet dei due file Tributi passa. La verifica sui
+sorgenti abbina tutti i dieci effetti della pagina ai rispettivi corpi della
+baseline. I 64 test unit della pagina passano con copertura integrale di
+statement, branch, funzioni e righe misurati nei due file. Passano anche i sei
+E2E desktop e mobile per annualità, regole sovrapposte e anteprima del sollecito.
+Il ratchet globale riporta ancora i 20 rilievi Presenze già presenti in
+`743b21c1`. La candidata resta esclusa dall’integrazione.

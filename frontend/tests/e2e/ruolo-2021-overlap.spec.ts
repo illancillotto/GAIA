@@ -53,8 +53,11 @@ for (const width of [1440, 390]) {
     await expect(page.getByText("Gestore annualita creato.").last()).toBeVisible();
     await expect(page.getByText("2018-2021", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Chiudi", exact: true }).click();
-    await page.getByRole("button", { name: "2021 · Avvisi 2021", exact: true }).click();
-    await expect(page).toHaveURL(/manager_key=avvisi_2021/);
+    await expect(page.getByText("2021 · Avvisi 2021", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "2021 · Avvisi 2021", exact: true })).toHaveCount(0);
+    await page.getByRole("textbox", { name: "Anno tributario" }).fill("2021");
+    await expect(page).toHaveURL(/anno=2021/);
+    await expect(page).not.toHaveURL(/manager_key=/);
     await page.getByRole("button", { name: "Wizard solleciti", exact: true }).click();
     const year = page.getByRole("button", { name: "2021", exact: true });
     await expect(year).toHaveAttribute("aria-pressed", "false");

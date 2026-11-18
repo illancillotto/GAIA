@@ -250,19 +250,18 @@ Aggiornamento UI successivo:
   personalizzabili per anno, blocchi per nome base e checkbox non notificati;
   consegna documentata distinta dall'accettazione PEC. Implementazione locale
   e vincoli di rilascio descritti in [TRIBUTI_RULE_BLOCKS_2026-10-19.md](TRIBUTI_RULE_BLOCKS_2026-10-19.md);
-- dal 2026-10-19 `Elenco tributi` raggruppa sotto i tre periodi dei gestori il
-  campo `Anno tributario` e il filtro `Solo non pagati (anche parziali)`, attivo
-  per default. L'anno vuoto seleziona tutte le annualita del periodo; cambiando
-  gestore si azzera l'anno e si riparte dalla prima pagina;
-- selezionando Consorzio/GAIA sono visibili i pulsanti rapidi 2022, 2023,
-  2024, 2025 e `Tutti gli anni`: condividono lo stato con il campo anno,
-  mantengono il filtro saldo e scompaiono negli altri periodi. Il campo manuale
-  consente anche anni diversi dalle quattro scorciatoie richieste;
-- il filtro riusa `open_only`: include pagamenti parziali e saldi da verificare,
-  esclude le posizioni saldate. Attivandolo si azzera l'eventuale filtro puntuale
-  sullo stato pagamento, cosi non restano esclusi i parziali;
-- anno, gestore e saldo sono applicati lato API sia alla lista paginata sia ai
-  KPI, e restano rappresentati nell'URL della pagina;
+- dal 2026-11-12, nella candidata locale, `Elenco tributi` usa il campo
+  `Anno tributario` indipendente dai gestori: vuoto comprende tutte le annualita
+  e tutte le tipologie. I pulsanti periodo e le scorciatoie GAIA sono rimossi;
+- le etichette delle regole restano nel riepilogo; ogni riga espone la tipologia
+  restituita dal backend, senza dedurla dall'anno (incluse le due tipologie 2021);
+- `Solo non pagati (anche parziali)` resta attivo per default. Attivandolo si
+  eliminano gli stati incompatibili; `unpaid` e `partial` espliciti restano;
+- anno e stato saldo filtrano lista e KPI e persistono nell'URL con ritorno a
+  pagina 1. `manager_key` dei link legacy viene ignorato dalla pagina e non
+  passa a lista, KPI, candidati o generazione wizard. Le API mantengono il
+  parametro opzionale per gli altri client. Verifiche e blocchi di rilascio in
+  [TRIBUTI_FILTERS_VALIDATION_2026-10-19.md](TRIBUTI_FILTERS_VALIDATION_2026-10-19.md);
 - gli avvisi con saldo aperto espongono l'azione rapida `Avviso sollecito` direttamente in
   `Elenco tributi`;
 - la stessa azione e disponibile nella modale `Dettaglio tributo`;

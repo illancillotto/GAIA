@@ -1,5 +1,24 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Filtro anno Tributi — 12 novembre, candidata locale bloccata
+
+Anno indipendente dai gestori; vuoto include tutte le annualita e tipologie.
+Rimossi pulsanti periodo e scorciatoie GAIA; etichette delle regole e dei singoli
+avvisi preservate. I link `manager_key` legacy non limitano lista, KPI o wizard.
+Aggiornati PRD, milestone e test dei flussi realmente introdotti.
+
+Verifiche isolate: 5.711 unit in 367 file, 18 smoke e 6 E2E desktop/mobile PASS;
+build (196 route), typecheck e lint senza errori. Coverage 100% dei due runtime
+secondo le esclusioni legacy invariate: statement 646/646, branch 626/626,
+funzioni 204/204, righe 586/586. Nessuna regressione funzionale osservata.
+
+La complessita diminuisce, ma il ratchet contro `main` resta bloccato su
+`ambiguous_identity` della callback autoapplicazione filtri. Il replay prima
+della modifica passa; nessun aggiornamento baseline o aggiramento del gate.
+**Nessun commit/deploy**, subordinati dal richiedente a tutti i controlli verdi.
+Dettagli, limiti coverage, diagnosi e comandi nel
+[rapporto filtri](TRIBUTI_FILTERS_VALIDATION_2026-10-19.md#verifica-finale-candidata--12-novembre-2026).
+
 ## Modelli Communications e audit PIN — 7 novembre, locale
 
 Il dominio espone i dati del singolo avviso tramite

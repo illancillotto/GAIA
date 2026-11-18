@@ -68,7 +68,6 @@ import type { CurrentUser } from "@/types/api";
 
 const PAGE_SIZE = 25;
 const FILTER_AUTOSUBMIT_DELAY_MS = 350;
-const DEFAULT_MANAGER_KEY = "gaia";
 const REMINDER_MIN_YEAR = 2021;
 const GAIA_REMINDER_TEMPLATE_PATH = "__gaia_proposal__";
 const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template GAIA con bollettino postale e partitario allegato";
@@ -327,32 +326,43 @@ type ReminderPreviewState = {
   error: string | null;
 };
 
+type TributiFilters = {
+  query: string;
+  anno: string;
+  comune: string;
+  paymentStatus: string;
+  workflowStatus: string;
+  openOnly: boolean;
+  unlinked: boolean;
+};
+
+function readTributiFilters(searchParams: Pick<URLSearchParams, "get">): TributiFilters {
+  return {
+    query: searchParams.get("q")?.trim() || "",
+    anno: searchParams.get("anno")?.trim() || "",
+    comune: searchParams.get("comune")?.trim() || "",
+    paymentStatus: searchParams.get("payment_status")?.trim() || "",
+    workflowStatus: searchParams.get("workflow_status")?.trim() || "",
+    openOnly: searchParams.get("open_only") !== "false",
+    unlinked: searchParams.get("unlinked") === "true",
+  };
+}
+
 function buildFiltersSearchParams({
   query,
   anno,
   comune,
   paymentStatus,
   workflowStatus,
-  managerKey,
   openOnly,
   unlinked,
-}: {
-  query: string;
-  anno: string;
-  comune: string;
-  paymentStatus: string;
-  workflowStatus: string;
-  managerKey: string;
-  openOnly: boolean;
-  unlinked: boolean;
-}) {
+}: TributiFilters) {
   const qs = new URLSearchParams();
   if (query.trim()) qs.set("q", query.trim());
   if (anno.trim()) qs.set("anno", anno.trim());
   if (comune.trim()) qs.set("comune", comune.trim());
   if (paymentStatus) qs.set("payment_status", paymentStatus);
   if (workflowStatus) qs.set("workflow_status", workflowStatus);
-  qs.set("manager_key", managerKey);
   if (!openOnly) qs.set("open_only", "false");
   if (unlinked) qs.set("unlinked", "true");
   qs.set("page", "1");
@@ -417,14 +427,7 @@ function RuoloTributiPageContent() {
   const reminderYearOptions = buildReminderYearOptions();
   const defaultReminderYears = buildDefaultReminderYears();
 
-  const query = searchParams.get("q")?.trim() || "";
-  const anno = searchParams.get("anno")?.trim() || "";
-  const comune = searchParams.get("comune")?.trim() || "";
-  const paymentStatus = searchParams.get("payment_status")?.trim() || "";
-  const workflowStatus = searchParams.get("workflow_status")?.trim() || "";
-  const managerKey = searchParams.get("manager_key")?.trim() || DEFAULT_MANAGER_KEY;
-  const openOnly = searchParams.get("open_only") !== "false";
-  const unlinked = searchParams.get("unlinked") === "true";
+  const { query, anno, comune, paymentStatus, workflowStatus, openOnly, unlinked } = readTributiFilters(searchParams);
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
 
   const [filterQuery, setFilterQuery] = useState(query);
@@ -432,7 +435,6 @@ function RuoloTributiPageContent() {
   const [filterComune, setFilterComune] = useState(comune);
   const [filterPaymentStatus, setFilterPaymentStatus] = useState(paymentStatus);
   const [filterWorkflowStatus, setFilterWorkflowStatus] = useState(workflowStatus);
-  const [filterManagerKey, setFilterManagerKey] = useState(managerKey);
   const [filterOpenOnly, setFilterOpenOnly] = useState(openOnly);
   const [filterUnlinked, setFilterUnlinked] = useState(unlinked);
   const canManageRules = canManageTributiRules(currentUser);
@@ -465,39 +467,28 @@ function RuoloTributiPageContent() {
     setFilterComune(comune);
     setFilterPaymentStatus(paymentStatus);
     setFilterWorkflowStatus(workflowStatus);
-    setFilterManagerKey(managerKey);
     setFilterOpenOnly(openOnly);
     setFilterUnlinked(unlinked);
-  }, [anno, comune, managerKey, openOnly, paymentStatus, query, unlinked, workflowStatus]);
+  }, [anno, comune, openOnly, paymentStatus, query, unlinked, workflowStatus]);
 
   useEffect(() => {
     if (!shouldApplyTextFilter(filterQuery) || !shouldApplyTextFilter(filterComune) || !shouldApplyAnnoFilter(filterAnno)) {
       return;
     }
-    const filtersChanged =
-      filterQuery.trim() !== query ||
-      filterAnno.trim() !== anno ||
-      filterComune.trim() !== comune ||
-      filterPaymentStatus !== paymentStatus ||
-      filterWorkflowStatus !== workflowStatus ||
-      filterManagerKey !== managerKey ||
-      filterOpenOnly !== openOnly ||
-      filterUnlinked !== unlinked;
-
-    if (!filtersChanged) return;
+    const applied = buildFiltersSearchParams({ query, anno, comune, paymentStatus, workflowStatus, openOnly, unlinked });
+    const pending = buildFiltersSearchParams({
+      query: filterQuery,
+      anno: filterAnno,
+      comune: filterComune,
+      paymentStatus: filterPaymentStatus,
+      workflowStatus: filterWorkflowStatus,
+      openOnly: filterOpenOnly,
+      unlinked: filterUnlinked,
+    });
+    if (pending.toString() === applied.toString()) return;
 
     const handle = window.setTimeout(() => {
-      const qs = buildFiltersSearchParams({
-        query: filterQuery,
-        anno: filterAnno,
-        comune: filterComune,
-        paymentStatus: filterPaymentStatus,
-        workflowStatus: filterWorkflowStatus,
-        managerKey: filterManagerKey,
-        openOnly: filterOpenOnly,
-        unlinked: filterUnlinked,
-      });
-      router.replace(`/ruolo/tributi?${qs}`);
+      router.replace(`/ruolo/tributi?${pending}`);
     }, FILTER_AUTOSUBMIT_DELAY_MS);
 
     return () => window.clearTimeout(handle);
@@ -505,14 +496,12 @@ function RuoloTributiPageContent() {
     filterAnno,
     filterComune,
     filterOpenOnly,
-    filterManagerKey,
     filterPaymentStatus,
     filterQuery,
     filterUnlinked,
     filterWorkflowStatus,
     anno,
     comune,
-    managerKey,
     openOnly,
     paymentStatus,
     query,
@@ -533,7 +522,6 @@ function RuoloTributiPageContent() {
       q: query || undefined,
       payment_status: paymentStatus || undefined,
       workflow_status: workflowStatus || undefined,
-      manager_key: managerKey,
       open_only: openOnly,
       unlinked,
     };
@@ -565,7 +553,7 @@ function RuoloTributiPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [anno, comune, dataRefreshKey, managerKey, openOnly, page, paymentStatus, query, token, unlinked, workflowStatus]);
+  }, [anno, comune, dataRefreshKey, openOnly, page, paymentStatus, query, token, unlinked, workflowStatus]);
 
   useEffect(() => {
     if (!token || !selectedId) {
@@ -597,7 +585,6 @@ function RuoloTributiPageContent() {
           anno_to: year,
           comune: comune || undefined,
           q: query || undefined,
-          manager_key: managerKey,
         }),
       ),
     )
@@ -613,7 +600,7 @@ function RuoloTributiPageContent() {
       })
       .catch((err: unknown) => setWizardError(err instanceof Error ? err.message : "Errore caricamento utenze sollecitabili"))
       .finally(() => setCandidatesLoading(false));
-  }, [comune, managerKey, query, selectedReminderYears, token, wizardOpen]);
+  }, [comune, query, selectedReminderYears, token, wizardOpen]);
 
   function refreshYearManagers(currentToken = token) {
     /* c8 ignore next -- Defensive guard: callers invoke this only after token availability. */
@@ -655,7 +642,6 @@ function RuoloTributiPageContent() {
     setFilterComune("");
     setFilterPaymentStatus("");
     setFilterWorkflowStatus("");
-    setFilterManagerKey(DEFAULT_MANAGER_KEY);
     setFilterOpenOnly(true);
     setFilterUnlinked(false);
     router.push("/ruolo/tributi?page=1");
@@ -1001,7 +987,6 @@ function RuoloTributiPageContent() {
           years: selectedReminderYears,
           comune: comune || null,
           q: query || null,
-          manager_key: managerKey,
         },
         template_path: GAIA_REMINDER_TEMPLATE_PATH,
         notes: "Batch generato da wizard tributi GAIA.",
@@ -1278,9 +1263,6 @@ function RuoloTributiPageContent() {
               </p>
               <p className="mt-3 text-lg font-semibold text-gray-900">Avvisi e saldo pagamento.</p>
               <TributiListFilters
-                managers={yearManagers}
-                managerKey={filterManagerKey}
-                onManagerChange={setFilterManagerKey}
                 anno={filterAnno}
                 openOnly={filterOpenOnly}
                 onAnnoChange={setFilterAnno}

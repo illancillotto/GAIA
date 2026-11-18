@@ -562,16 +562,14 @@ describe("Ruolo tributi page", () => {
     expect(screen.getAllByText("0,00 €").length).toBeGreaterThan(0);
     expect(screen.getByText("In attesa del file Excel raccomandate")).toBeInTheDocument();
     expect(await screen.findByText("Gestori annualita tributo")).toBeInTheDocument();
-    const adeFilter = screen.getByRole("button", { name: "Fino al 2017 · Agenzia delle Entrate" });
-    const stepFilter = screen.getByRole("button", { name: "2018-2021 · STEP - Agenzia recupero crediti" });
-    const gaiaFilter = screen.getByRole("button", { name: "Dal 2022 · Consorzio/GAIA" });
-    expect(adeFilter).toHaveClass("bg-red-50");
-    expect(stepFilter).toHaveClass("bg-orange-50");
-    expect(gaiaFilter).toHaveClass("bg-yellow-400");
-    expect(gaiaFilter).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "Fino al 2017 · Agenzia delle Entrate" })).not.toBeInTheDocument();
+    expect(screen.getByText("Fino al 2017 · Agenzia delle Entrate")).toBeInTheDocument();
+    expect(screen.getByText("2018-2021 · STEP - Agenzia recupero crediti")).toBeInTheDocument();
+    expect(screen.getByText("Dal 2022 · Consorzio/GAIA")).toBeInTheDocument();
     await waitFor(() => {
-      expect(mocks.listTributiAvvisi).toHaveBeenCalledWith("token", expect.objectContaining({ manager_key: "gaia" }));
-      expect(mocks.getTributiSummary).toHaveBeenCalledWith("token", expect.objectContaining({ manager_key: "gaia", open_only: true }));
+      expect(mocks.listTributiAvvisi).toHaveBeenCalledWith("token", expect.objectContaining({ open_only: true }));
+      expect(mocks.listTributiAvvisi.mock.lastCall![1]).not.toHaveProperty("manager_key");
+      expect(mocks.getTributiSummary.mock.lastCall![1]).not.toHaveProperty("manager_key");
     });
 
     fireEvent.change(screen.getByPlaceholderText("Rossi, CNC, utenza, comune..."), {
@@ -597,13 +595,7 @@ describe("Ruolo tributi page", () => {
       expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("comune=Mogoro"));
     });
 
-    fireEvent.click(stepFilter);
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("manager_key=step")));
-    expect(stepFilter).toHaveClass("bg-orange-600");
-    expect(gaiaFilter).toHaveClass("bg-yellow-50");
-    fireEvent.click(adeFilter);
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("manager_key=agenzia_entrate")));
-    expect(adeFilter).toHaveClass("bg-red-700");
+
   });
 
   test("renders tributi list without registered mails console", async () => {
@@ -616,10 +608,12 @@ describe("Ruolo tributi page", () => {
   });
 
   test.each([
-    ["agenzia_entrate", "2017", "Fino al 2017 · Agenzia delle Entrate"],
-    ["step", "2019", "2018-2021 · STEP - Agenzia recupero crediti"],
-    ["gaia", "2024", "Dal 2022 · Consorzio/GAIA"],
-  ])("filters outstanding tributi by year in the %s period", async (managerKey, year, periodLabel) => {
+    ["agenzia_entrate", "2017"],
+    ["step", "2019"],
+    ["step", "2021"],
+    ["gaia", "2024"],
+    ["gaia", "2026"],
+  ])("filters by year across all types, ignoring legacy %s links (%s)", async (managerKey, year) => {
     mocks.searchParams = new URLSearchParams(
       `manager_key=${managerKey}&open_only=false&payment_status=paid&q=Rossi&page=3`,
     );
@@ -628,77 +622,61 @@ describe("Ruolo tributi page", () => {
     const section = screen.getByText("Elenco tributi").closest("section")!;
     const yearInput = within(section).getByRole("textbox", { name: "Anno tributario" });
     const outstandingFilter = within(section).getByRole("checkbox", { name: "Solo non pagati (anche parziali)" });
-    expect(within(section).getByRole("button", { name: periodLabel })).toHaveAttribute("aria-pressed", "true");
     expect(outstandingFilter).not.toBeChecked();
+    expect(mocks.listTributiAvvisi.mock.lastCall![1]).not.toHaveProperty("manager_key");
 
     fireEvent.change(yearInput, { target: { value: year } });
     fireEvent.click(outstandingFilter);
     await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
     const filteredUrl = new URL(mocks.replace.mock.lastCall![0], "http://gaia.lan");
-    expect(Object.fromEntries(filteredUrl.searchParams)).toEqual({
-      q: "Rossi", anno: year, manager_key: managerKey, page: "1",
-    });
-
+    expect(Object.fromEntries(filteredUrl.searchParams)).toEqual({ q: "Rossi", anno: year, page: "1" });
     mocks.searchParams = filteredUrl.searchParams;
     view.rerender(<RuoloTributiPage />);
     await waitFor(() => {
       expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
-        manager_key: managerKey, anno: Number(year), open_only: true, payment_status: undefined, page: 1,
+        anno: Number(year), open_only: true, payment_status: undefined, page: 1,
       }));
       expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({
-        manager_key: managerKey, anno: Number(year), open_only: true, payment_status: undefined,
+        anno: Number(year), open_only: true, payment_status: undefined,
       }));
     });
+    expect(mocks.listTributiAvvisi.mock.lastCall![1]).not.toHaveProperty("manager_key");
+    expect(mocks.getTributiSummary.mock.lastCall![1]).not.toHaveProperty("manager_key");
     expect(outstandingFilter).toBeChecked();
     expect(within(section).getByText("Parziale")).toBeInTheDocument();
 
     mocks.replace.mockClear();
-    const nextPeriod = managerKey === "step" ? "gaia" : "step";
-    const nextPeriodLabel = managerKey === "step" ? "Dal 2022 · Consorzio/GAIA" : "2018-2021 · STEP - Agenzia recupero crediti";
-    fireEvent.click(within(section).getByRole("button", { name: nextPeriodLabel }));
-    expect(yearInput).toHaveValue("");
+    fireEvent.change(yearInput, { target: { value: "" } });
     await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
     const nextUrl = new URL(mocks.replace.mock.lastCall![0], "http://gaia.lan");
-    expect(Object.fromEntries(nextUrl.searchParams)).toEqual({ q: "Rossi", manager_key: nextPeriod, page: "1" });
+    expect(Object.fromEntries(nextUrl.searchParams)).toEqual({ q: "Rossi", page: "1" });
     mocks.searchParams = nextUrl.searchParams;
     view.rerender(<RuoloTributiPage />);
     await waitFor(() => {
       expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
-        manager_key: nextPeriod, anno: undefined, open_only: true, payment_status: undefined, page: 1,
+        anno: undefined, open_only: true, payment_status: undefined, page: 1,
       }));
       expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({
-        manager_key: nextPeriod, anno: undefined, open_only: true, payment_status: undefined,
+        anno: undefined, open_only: true, payment_status: undefined,
       }));
     });
   });
 
-  test.each(["2022", "2023", "2024", "2025"])("selects the GAIA %s shortcut for the list and summary", async (year) => {
-    mocks.searchParams = new URLSearchParams("manager_key=gaia&q=Rossi&page=3");
-    const view = render(<RuoloTributiPage />);
-    await screen.findByText("ROSSI MARIO");
-    const shortcuts = screen.getByRole("group", { name: "Anni Consorzio/GAIA" });
-    expect(within(shortcuts).getAllByRole("button")).toHaveLength(5);
-    expect(within(shortcuts).getByRole("button", { name: "Tutti gli anni" })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(within(shortcuts).getByRole("button", { name: year }));
-    expect(screen.getByRole("textbox", { name: "Anno tributario" })).toHaveValue(year);
-    expect(within(shortcuts).getByRole("button", { name: year })).toHaveAttribute("aria-pressed", "true");
-    expect(within(shortcuts).getByRole("button", { name: "Tutti gli anni" })).toHaveAttribute("aria-pressed", "false");
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
-    const filteredUrl = new URL(mocks.replace.mock.lastCall![0], "http://gaia.lan");
-    expect(Object.fromEntries(filteredUrl.searchParams)).toEqual({
-      q: "Rossi", anno: year, manager_key: "gaia", page: "1",
+  test("keeps the actual type label for different notices in the same year", async () => {
+    mocks.searchParams = new URLSearchParams("anno=2021&manager_key=step");
+    mocks.listTributiAvvisi.mockResolvedValue({
+      items: [
+        { ...listItem, id: "step-2021", anno_tributario: 2021, annuality_manager_key: "step", annuality_manager_label: "STEP - Agenzia recupero crediti" },
+        { ...listItem, id: "unnotified-2021", anno_tributario: 2021, annuality_manager_key: "avvisi_2021", annuality_manager_label: "Anno 2021 - avvisi non notificati" },
+      ], total: 2, page: 1, page_size: 25,
     });
-    mocks.searchParams = filteredUrl.searchParams;
-    view.rerender(<RuoloTributiPage />);
-    await waitFor(() => {
-      expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
-        manager_key: "gaia", anno: Number(year), open_only: true, page: 1,
-      }));
-      expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({
-        manager_key: "gaia", anno: Number(year), open_only: true,
-      }));
-    });
-    expect(screen.getByRole("checkbox", { name: "Solo non pagati (anche parziali)" })).toBeChecked();
+    render(<RuoloTributiPage />);
+    const section = (await screen.findByText("Elenco tributi")).closest("section")!;
+    expect(await within(section).findByText("STEP - Agenzia recupero crediti")).toBeInTheDocument();
+    expect(within(section).getByText("Anno 2021 - avvisi non notificati")).toBeInTheDocument();
+    expect(mocks.listTributiAvvisi.mock.lastCall![1]).toMatchObject({ anno: 2021 });
+    expect(mocks.listTributiAvvisi.mock.lastCall![1]).not.toHaveProperty("manager_key");
+    expect(mocks.getTributiSummary.mock.lastCall![1]).not.toHaveProperty("manager_key");
   });
 
   test("filters unpaid and partially paid tributi separately", async () => {
@@ -720,13 +698,13 @@ describe("Ruolo tributi page", () => {
       expect(within(statuses).getByRole("button", { name: label })).toHaveAttribute("aria-pressed", "true");
     };
 
-    await applyStatus("Non pagati", { payment_status: "unpaid", manager_key: "gaia", page: "1" });
+    await applyStatus("Non pagati", { payment_status: "unpaid", page: "1" });
     await waitFor(() => {
       expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
-        manager_key: "gaia", open_only: true, payment_status: "unpaid", page: 1,
+        open_only: true, payment_status: "unpaid", page: 1,
       }));
       expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({
-        manager_key: "gaia", open_only: true, payment_status: "unpaid",
+        open_only: true, payment_status: "unpaid",
       }));
     });
     fireEvent.click(outstandingFilter);
@@ -734,46 +712,33 @@ describe("Ruolo tributi page", () => {
     expect(outstandingFilter).toBeChecked();
     expect(within(statuses).getByRole("button", { name: "Non pagati" })).toHaveAttribute("aria-pressed", "true");
 
-    await applyStatus("Pagamenti parziali", { payment_status: "partial", manager_key: "gaia", page: "1" });
+    await applyStatus("Pagamenti parziali", { payment_status: "partial", page: "1" });
     await waitFor(() => expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
       open_only: true, payment_status: "partial",
     })));
 
-    await applyStatus("Tutti gli stati", { manager_key: "gaia", page: "1" });
+    await applyStatus("Tutti gli stati", { page: "1" });
     await waitFor(() => expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
       open_only: true, payment_status: undefined,
     })));
   });
 
-  test("synchronizes year shortcuts with manual input, reset and manager changes", async () => {
+  test("restores the year from the URL and clears it without changing payment filters", async () => {
     mocks.searchParams = new URLSearchParams("manager_key=gaia&anno=2023&open_only=false");
     const view = render(<RuoloTributiPage />);
     await screen.findByText("ROSSI MARIO");
-    const shortcuts = screen.getByRole("group", { name: "Anni Consorzio/GAIA" });
     const yearInput = screen.getByRole("textbox", { name: "Anno tributario" });
-    expect(within(shortcuts).getByRole("button", { name: "2023" })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.change(yearInput, { target: { value: "2025" } });
-    expect(within(shortcuts).getByRole("button", { name: "2025" })).toHaveAttribute("aria-pressed", "true");
-    fireEvent.change(yearInput, { target: { value: "2026" } });
-    expect(within(shortcuts).queryByRole("button", { pressed: true })).not.toBeInTheDocument();
-    fireEvent.click(within(shortcuts).getByRole("button", { name: "Tutti gli anni" }));
-    expect(yearInput).toHaveValue("");
+    expect(yearInput).toHaveValue("2023");
+    fireEvent.change(yearInput, { target: { value: "" } });
     await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
     const filteredUrl = new URL(mocks.replace.mock.lastCall![0], "http://gaia.lan");
-    expect(Object.fromEntries(filteredUrl.searchParams)).toEqual({ manager_key: "gaia", open_only: "false", page: "1" });
+    expect(Object.fromEntries(filteredUrl.searchParams)).toEqual({ open_only: "false", page: "1" });
     mocks.searchParams = filteredUrl.searchParams;
     view.rerender(<RuoloTributiPage />);
     await waitFor(() => {
       expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({ anno: undefined, open_only: false }));
       expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({ anno: undefined, open_only: false }));
     });
-    for (const period of ["2018-2021 · STEP - Agenzia recupero crediti", "Fino al 2017 · Agenzia delle Entrate"]) {
-      fireEvent.click(screen.getByRole("button", { name: period }));
-      expect(screen.queryByRole("group", { name: "Anni Consorzio/GAIA" })).not.toBeInTheDocument();
-      expect(yearInput).toBeInTheDocument();
-    }
-    fireEvent.click(screen.getByRole("button", { name: "Dal 2022 · Consorzio/GAIA" }));
-    expect(screen.getByRole("group", { name: "Anni Consorzio/GAIA" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Solo non pagati (anche parziali)" })).not.toBeChecked();
   });
 
@@ -1403,8 +1368,7 @@ describe("Ruolo tributi page", () => {
     });
     render(<RuoloTributiPage />);
     expect(await screen.findByText("+1")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "2026 · Extra 1" }));
-    expect(screen.getByRole("button", { name: "2026 · Extra 1" })).toHaveClass("bg-[#1D4E35]");
+    expect(screen.queryByRole("button", { name: "2026 · Extra 1" })).not.toBeInTheDocument();
   });
 
   test("renders raccomandata hints when archive source is available", async () => {
@@ -1646,13 +1610,17 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("Errore accodamento sync inCASS")).toBeInTheDocument();
   });
 
-  test("opens reminder wizard, supports manual selection and generates batch", async () => {
+  test("opens reminder wizard, supports manual selection and generates batch without a hidden manager filter", async () => {
+    mocks.searchParams = new URLSearchParams("manager_key=step");
     render(<RuoloTributiPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Wizard solleciti" }));
 
     expect(await screen.findByText("Crea batch PDF per utenze morose")).toBeInTheDocument();
     expect(await screen.findByText(/1 utenze aperte trovate/)).toBeInTheDocument();
+    for (const [, params] of mocks.listTributiReminderCandidates.mock.calls) {
+      expect(params).not.toHaveProperty("manager_key");
+    }
     expect(screen.getAllByText(/CF\/P.IVA RSSMRA80A01H501Z/).length).toBeGreaterThan(0);
     await waitFor(() => expect(mocks.listTributiReminderCandidates).toHaveBeenCalledTimes(2));
     expect(mocks.listTributiReminderCandidates).toHaveBeenCalledWith(
@@ -1687,6 +1655,7 @@ describe("Ruolo tributi page", () => {
     expect(screen.getByText(/RSSMRA80A01H501Z_avviso_sollecito_2024-2025.pdf/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Chiudi wizard" }));
     expect(screen.queryByText("Crea batch PDF per utenze morose")).not.toBeInTheDocument();
+    expect(mocks.createTributiReminderBatch.mock.lastCall![1].filters).not.toHaveProperty("manager_key");
   });
 
   test("keeps original recipients separate when their invalid tax code is shared", async () => {

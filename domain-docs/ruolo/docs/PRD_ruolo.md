@@ -280,17 +280,18 @@ provenienza e recupero dello storico sono descritti in
 > per le righe della pagina richiesta, riducendo il rischio di `Gateway Time-out` sul
 > perimetro `Consorzio/GAIA` con vista `Solo scoperti`.
 >
-> Aggiornamento 2026-10-19: `Elenco tributi` raggruppa i tre periodi dei gestori,
-> il campo `Anno tributario` e `Solo non pagati (anche parziali)`. Il filtro saldo
-> e attivo per default e riusa `open_only`: include residui positivi e posizioni
-> da verificare, esclude saldati ed eccedenze. Attivarlo azzera lo stato pagamento
-> puntuale per includere anche i parziali. L'anno vuoto comprende tutto il periodo;
-> cambiando gestore l'anno viene svuotato. Lista e KPI ricevono gli stessi filtri,
-> persistiti nell'URL, con ritorno alla prima pagina a ogni cambio filtro.
-> Selezionando Consorzio/GAIA compaiono anche i pulsanti 2022, 2023, 2024,
-> 2025 e `Tutti gli anni`, sincronizzati con il campo anno senza cambiare il
-> filtro saldo. Sono scorciatoie esplicite, non l'elenco degli anni disponibili:
-> il campo manuale resta utilizzabile anche per altri anni.
+> Aggiornamento locale 2026-11-12: `Elenco tributi` usa `Anno tributario`
+> come filtro principale. Quattro cifre selezionano un anno; vuoto include tutti
+> gli anni e le tipologie. Rimossi pulsanti gestore e scorciatoie GAIA; le regole
+> restano configurabili e la tipologia di ogni avviso resta un'etichetta dati,
+> anche quando piu tipologie coesistono nel 2021. I link legacy `manager_key`
+> non restringono lista, KPI o wizard. Anno, ricerca e stati restano nell'URL;
+> un cambio filtro torna alla pagina 1. `open_only` e attivo per default,
+> include parziali e saldi da verificare ed esclude saldati/eccedenze. Attivarlo
+> rimuove gli stati incompatibili, preservando `unpaid` e `partial` espliciti.
+> Il wizard usa i propri anni selezionati senza filtro gestore nascosto.
+> Stato delle verifiche e del rilascio in
+> [TRIBUTI_FILTERS_VALIDATION_2026-10-19.md](TRIBUTI_FILTERS_VALIDATION_2026-10-19.md).
 >
 > Aggiornamento 2026-08-05: le `Regole ruolo` multi-annualita vengono salvate come policy
 > annuali separate per permettere date diverse per scadenza bonaria e fallback interessi.
