@@ -1,23 +1,39 @@
 "use client";
+
 import { useRef, useState } from "react";
 import { updatePresenzeDailyRecord } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { PresenzeDailyRecord } from "@/types/api";
 
-type Props = { record: PresenzeDailyRecord; disabled: boolean; onSaved: (record: PresenzeDailyRecord) => void };
-export function MealVoucherControl({ record, disabled, onSaved }: Props) {
+type Props = {
+  record: PresenzeDailyRecord;
+  disabled: boolean;
+  onSaved: (record: PresenzeDailyRecord) => void;
+};
+
+function manualVoucherPermissions(record: PresenzeDailyRecord, disabled: boolean) {
   const hasPresence = (record.punches ?? []).some(punch => Boolean(punch.entry_time || punch.exit_time));
+  const canChange = (enabled: boolean) => !disabled && (!enabled || hasPresence);
+  return { hasPresence, canChange };
+}
+
+function useManualVoucherUpdate(
+  recordId: PresenzeDailyRecord["id"],
+  canChange: (enabled: boolean) => boolean,
+  onSaved: Props["onSaved"],
+) {
   const busy = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
   async function toggle(enabled: boolean) {
     const token = getStoredAccessToken();
-    if (!token || disabled || busy.current || (enabled && !hasPresence)) return;
+    if (!token || busy.current || !canChange(enabled)) return;
     busy.current = true;
     setSaving(true);
     setError("");
     try {
-      onSaved(await updatePresenzeDailyRecord(token, record.id, { meal_voucher_manual: enabled }));
+      onSaved(await updatePresenzeDailyRecord(token, recordId, { meal_voucher_manual: enabled }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Buono pasto non salvato");
     } finally {
@@ -25,9 +41,24 @@ export function MealVoucherControl({ record, disabled, onSaved }: Props) {
       setSaving(false);
     }
   }
+
+  return { saving, error, toggle };
+}
+
+export function MealVoucherControl({ record, disabled, onSaved }: Props) {
+  const { hasPresence, canChange } = manualVoucherPermissions(record, disabled);
+  const { saving, error, toggle } = useManualVoucherUpdate(record.id, canChange, onSaved);
   return <div className="rounded border p-2 text-sm">
     <p>Buono pasto: {record.meal_voucher_count ?? 0} · {record.meal_voucher_sources?.join(" + ") || "non riconosciuto"}</p>
-    <label><input type="checkbox" aria-label="Buono pasto manuale" checked={record.meal_voucher_manual === true} disabled={disabled || saving || (!hasPresence && !record.meal_voucher_manual)} onChange={event => void toggle(event.target.checked)} /> Buono pasto manuale</label>
+    <label>
+      <input
+        type="checkbox"
+        aria-label="Buono pasto manuale"
+        checked={record.meal_voucher_manual === true}
+        disabled={saving || !canChange(!record.meal_voucher_manual)}
+        onChange={event => void toggle(event.target.checked)}
+      /> Buono pasto manuale
+    </label>
     {!hasPresence && <p>Assenza di timbrature: puoi solo rimuovere il buono manuale.</p>}
     {saving && <p role="status">Salvataggio…</p>}
     {error && <p role="alert">{error}</p>}
