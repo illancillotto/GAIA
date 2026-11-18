@@ -4,9 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.modules.presenze.gate_daily_record_schemas import GatePresenzeDailyRecordPatchRequest
 from app.modules.presenze.models import PresenzeDailyRecord
+from app.modules.presenze.services.daily_record_edits import apply_manual_daily_fields
 from app.modules.presenze.services.gate_shift_assignment import apply_gate_shift_assignment
-from app.modules.presenze.services.manual_presence import validate_manual_km
-from app.modules.presenze.services.meal_vouchers import apply_audited_manual_meal_voucher
 
 
 def apply_gate_daily_record_patch(
@@ -18,8 +17,4 @@ def apply_gate_daily_record_patch(
     if apply_gate_shift_assignment(db, record, request, actor_id):
         return
     values = request.model_dump(exclude_unset=True, exclude={"operator_note", "client_request_id"})
-    validate_manual_km(db, record, values.get("km_value"))
-    enabled = values.pop("meal_voucher_manual", None)
-    apply_audited_manual_meal_voucher(db, record, enabled, actor_id, "gate_console_mobile")
-    for field, value in values.items():
-        setattr(record, field, value)
+    apply_manual_daily_fields(db, record, values, actor_id, "gate_console_mobile")

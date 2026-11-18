@@ -7,14 +7,22 @@ from sqlalchemy.orm import Session
 from app.modules.presenze.models import PresenzeDailyPunch, PresenzeDailyRecord
 
 
-def require_manual_presence(db: Session, record: PresenzeDailyRecord) -> None:
-    # Serialize benefit edits against the daily record, as the voucher audit does.
-    db.scalars(
+def lock_for_manual_benefit(
+    db: Session, record: PresenzeDailyRecord, *, require_punch: bool
+) -> PresenzeDailyRecord:
+    """Reload the day under lock before checking punches or changing a benefit."""
+    locked = db.scalars(
         select(PresenzeDailyRecord)
         .where(PresenzeDailyRecord.id == record.id)
         .with_for_update()
         .execution_options(populate_existing=True)
     ).one()
+    if require_punch:
+        _require_punch(db, locked)
+    return locked
+
+
+def _require_punch(db: Session, record: PresenzeDailyRecord) -> None:
     present = db.scalar(
         select(PresenzeDailyPunch.id)
         .where(
@@ -36,4 +44,4 @@ def require_manual_presence(db: Session, record: PresenzeDailyRecord) -> None:
 
 def validate_manual_km(db: Session, record: PresenzeDailyRecord, value: int | None) -> None:
     if value is not None and value > 0:
-        require_manual_presence(db, record)
+        lock_for_manual_benefit(db, record, require_punch=True)

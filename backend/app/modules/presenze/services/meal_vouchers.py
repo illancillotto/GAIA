@@ -5,11 +5,10 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.presenze.models import PresenzeDailyRecord
-from app.modules.presenze.services.manual_presence import require_manual_presence
+from app.modules.presenze.services.manual_presence import lock_for_manual_benefit
 from app.modules.presenze.services.meal_voucher_audit import record_manual_meal_voucher_change
 from app.modules.presenze.services.shift_voucher_policy import shift_voucher_profile
 from app.modules.presenze.services.shift_worker_rules import (
@@ -58,18 +57,5 @@ def apply_audited_manual_meal_voucher(
 ) -> None:
     if enabled is None:
         return
-    locked = lock_manual_meal_voucher_record(db, record)
-    if enabled:
-        require_manual_presence(db, locked)
+    locked = lock_for_manual_benefit(db, record, require_punch=enabled)
     record_manual_meal_voucher_change(locked, enabled, actor_id, source)
-
-
-def lock_manual_meal_voucher_record(
-    db: Session, record: PresenzeDailyRecord
-) -> PresenzeDailyRecord:
-    return db.scalars(
-        select(PresenzeDailyRecord)
-        .where(PresenzeDailyRecord.id == record.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    ).one()
