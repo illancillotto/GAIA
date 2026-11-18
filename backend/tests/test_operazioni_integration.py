@@ -1,9 +1,8 @@
 """Integration tests for GAIA Operazioni module — requires PostgreSQL."""
 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
-from uuid import UUID
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -12,60 +11,28 @@ from sqlalchemy.orm import Session
 
 # Import ApplicationUser so its table is registered in Base metadata
 from app.models.application_user import ApplicationUser  # noqa: F401
-from app.core.database import Base
-from app.modules.operazioni.models.organizational import Team, OperatorProfile
-from app.modules.operazioni.models.vehicles import (
-    Vehicle,
-    VehicleAssignment,
-    VehicleUsageSession,
-)
 from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
+from app.modules.operazioni.models.gps import GpsTrackSummary
+from app.modules.operazioni.models.organizational import OperatorProfile, Team
 from app.modules.operazioni.models.reports import (
+    FieldReport,
     FieldReportCategory,
     FieldReportSeverity,
-    FieldReport,
     InternalCase,
 )
-from app.modules.operazioni.models.attachments import Attachment
-from app.modules.operazioni.models.gps import GpsTrackSummary
+from app.modules.operazioni.services.attachment_service import (
+    check_quota,
+    create_quota_metric,
+    get_latest_metric,
+)
 from app.modules.operazioni.services.vehicle_service import (
+    create_fuel_log,
+    create_maintenance,
     create_vehicle,
     get_vehicle,
     list_vehicles,
     start_usage_session,
     stop_usage_session,
-    create_fuel_log,
-    create_maintenance,
-)
-from app.modules.operazioni.services.attachment_service import (
-    get_attachment_type,
-    check_quota,
-    create_quota_metric,
-    get_latest_metric,
-)
-from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
-from app.modules.operazioni.models.reports import (
-    FieldReportCategory,
-    FieldReportSeverity,
-    FieldReport,
-    InternalCase,
-)
-from app.modules.operazioni.models.attachments import Attachment
-from app.modules.operazioni.models.gps import GpsTrackSummary
-from app.modules.operazioni.services.vehicle_service import (
-    create_vehicle,
-    get_vehicle,
-    list_vehicles,
-    start_usage_session,
-    stop_usage_session,
-    create_fuel_log,
-    create_maintenance,
-)
-from app.modules.operazioni.services.attachment_service import (
-    get_attachment_type,
-    check_quota,
-    create_quota_metric,
-    get_latest_metric,
 )
 
 
@@ -230,7 +197,7 @@ class TestVehicleIntegration:
             datetime(2026, 5, 1, 8, 0, 0),
             datetime(2026, 5, 2, 8, 0, 0),
         ):
-            start_usage_session(
+            usage = start_usage_session(
                 db_session,
                 {
                     "vehicle_id": busiest.id,
@@ -238,6 +205,10 @@ class TestVehicleIntegration:
                     "started_at": started_at,
                     "start_odometer_km": Decimal("10000.0"),
                 },
+            )
+            stop_usage_session(
+                db_session, usage,
+                {"ended_at": started_at + timedelta(hours=1), "end_odometer_km": Decimal("10000.0")},
             )
         start_usage_session(
             db_session,
