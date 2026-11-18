@@ -10,9 +10,12 @@ from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoDocument
 from app.models.catasto_phase1 import CatParticella, CatUtenzaIntestatario, CatUtenzaIrrigua
 from app.modules.ruolo.models import RuoloAvviso
-from app.modules.search.schemas import OperationalSearchResponse, OperationalSearchResult, SearchModule
+from app.modules.search.schemas import (
+    OperationalSearchResponse,
+    OperationalSearchResult,
+    SearchModule,
+)
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson
-
 
 _MODULE_PRIORITY: dict[SearchModule, int] = {"utenze": 0, "ruolo": 1, "catasto": 2}
 _SUBJECT_RESULT_TYPES = frozenset({"subject_person", "subject_company"})
@@ -74,21 +77,26 @@ def _matches_tokens(columns: Iterable[Any], query: str) -> Any:
     return and_(*(or_(*(_contains(column, token) for column in columns)) for token in tokens))
 
 
+def _score_value(normalized_query: str, raw: str | None) -> int:
+    value = (raw or "").strip().lower()
+    if not value:
+        return 0
+    if value == normalized_query:
+        return 100
+    if value.startswith(normalized_query):
+        return 86
+    if normalized_query in value:
+        return 68
+    if all(token in value for token in normalized_query.split()):
+        return 64
+    return 0
+
+
 def _score(query: str, values: Iterable[str | None]) -> int:
     normalized_query = query.lower()
     best = 0
     for raw in values:
-        value = (raw or "").strip().lower()
-        if not value:
-            continue
-        if value == normalized_query:
-            best = max(best, 100)
-        elif value.startswith(normalized_query):
-            best = max(best, 86)
-        elif normalized_query in value:
-            best = max(best, 68)
-        elif all(token in value for token in normalized_query.split()):
-            best = max(best, 64)
+        best = max(best, _score_value(normalized_query, raw))
     return best or 40
 
 
