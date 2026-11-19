@@ -1,5 +1,5 @@
 APScheduler==3.10.4
-pypdf==6.21.1
+pypdf==6.21.2
 alembic==1.16.5
 beautifulsoup4==4.13.5
 cryptography==50.0.0
