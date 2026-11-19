@@ -19,7 +19,7 @@ from app.modules.presenze.services.shift_daily_policy import (
 )
 from app.modules.presenze.services.shift_voucher_policy import shift_voucher_profile
 
-SHIFT_WORKER_TYPES = {"acquaiolo", "telecontrollo", "tecnico_turnista"}
+SHIFT_WORKER_TYPES = {"acquaiolo", "adduttore", "telecontrollo", "tecnico_turnista"}
 SHIFT_EXPECTED_MINUTES = 420
 REST_CODES = {"SAB", "DOM", "RIPTURN", "SMONTO"}
 

@@ -173,7 +173,7 @@ export type PresenzeDailyRecord = {
   avventizio_no_punches?: boolean;
   attendance_note?: string | null;
   export_absence_code?: string | null;
-  shift_worker_type?: "none" | "acquaiolo" | "telecontrollo" | "tecnico_turnista";
+  shift_worker_type?: "none" | "acquaiolo" | "adduttore" | "telecontrollo" | "tecnico_turnista";
   shift_worker_source?: "gate" | "gaia" | null;
   shift_rules_version?: string;
   meal_voucher_shift?: boolean;

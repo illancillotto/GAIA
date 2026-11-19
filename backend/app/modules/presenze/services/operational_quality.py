@@ -14,8 +14,8 @@ from app.modules.presenze.models import (
 )
 from app.modules.presenze.services.daily_details import normalized_daily_detail
 from app.modules.presenze.services.operai_daily_policy import (
-    recognized_daily_minutes,
     recognized_extra_minutes,
+    recognized_record_minutes,
 )
 from app.modules.presenze.services.operai_recognized_minutes import RecognizedOperaiMinutes
 from app.modules.presenze.services.operai_rules import (
@@ -112,7 +112,7 @@ def evaluate_operai_operational_quality(
         )
 
     worked_minutes_value = worked_minutes or 0
-    recognized_minutes = policy.recognized_minutes or recognized_daily_minutes(punches, resolved_rule)
+    recognized_minutes = policy.recognized_minutes or recognized_record_minutes(record, punches, resolved_rule)
     worked_minutes_value, missing_minutes, mpe_minutes = _operai_accounted_totals(
         record, recognized_minutes, worked_minutes_value, expected_minutes, covered_absence_minutes,
     )

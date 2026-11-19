@@ -67,15 +67,10 @@ def profile_covers_date(profile, work_date):
 
 
 def technician_shift_type(record, assignment):
+    kind = assignment["shift_worker_type"]
+    if kind in {"adduttore", "none"} and assignment["shift_worker_source"] is not None:
+        return kind
     profile = technician_profile(record)
     if profile is None:
-        return (
-            "none"
-            if assignment["shift_worker_type"] == TECHNICIAN_PROFILE
-            else assignment["shift_worker_type"]
-        )
-    if (record.schedule_code or "").upper() not in profile.shift_schedule_codes:
-        return "none"
-    if assignment["shift_worker_source"] is not None and assignment["shift_worker_type"] == "none":
-        return "none"
-    return TECHNICIAN_PROFILE
+        return "none" if kind == TECHNICIAN_PROFILE else kind
+    return profile.profile_type if (record.schedule_code or "").upper() in profile.shift_schedule_codes else "none"

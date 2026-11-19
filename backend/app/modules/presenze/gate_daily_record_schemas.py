@@ -7,11 +7,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, StrictBool, model_validator
 
-from app.modules.presenze.shift_worker_schemas import GateShiftWorkerAssignmentRequest
+from app.modules.presenze.shift_worker_schemas import (
+    GateShiftWorkerAssignmentRequest,
+    ShiftWorkerType,
+)
 
 
 class GatePresenzeDailyRecordPatchRequest(BaseModel):
-    shift_worker_type: Literal["none", "acquaiolo", "telecontrollo", "tecnico_turnista"] | None = None
+    shift_worker_type: ShiftWorkerType | None = None
     date_from: date | None = None
     date_to: date | None = None
     gate_shift_requested_at: datetime | None = None

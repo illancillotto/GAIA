@@ -32,9 +32,13 @@ def test_shift_migration_and_concurrent_retry_preserve_gate_authority(operations
         str(Path(__file__).parents[1] / "alembic/versions"),
         "20261003_1200_presenze_shift_assignments.py",
     )
+    adduttore = load_python_file(
+        str(Path(__file__).parents[1] / "alembic/versions"), "20261119_1600_presenze_adduttore.py"
+    )
     with operations_engine.begin() as conn:
         with Operations.context(MigrationContext.configure(conn)):
             migration.upgrade()
+            adduttore.upgrade()
         assert len(inspect(conn).get_check_constraints("presenze_shift_assignments")) == 3
     with Session(operations_engine) as db:
         person = PresenzeCollaborator(employee_code="shift-test", name="Test", owner_user_id=1)
@@ -50,7 +54,7 @@ def test_shift_migration_and_concurrent_retry_preserve_gate_authority(operations
         db.commit()
         record_id = day.id
     request = ShiftWorkerAssignmentRequest(
-        shift_worker_type="telecontrollo",
+        shift_worker_type="adduttore",
         date_from=date(2026, 10, 1),
         date_to=date(2026, 10, 31),
     )
@@ -70,7 +74,7 @@ def test_shift_migration_and_concurrent_retry_preserve_gate_authority(operations
     with Session(operations_engine) as db:
         day = db.get(PresenzeDailyRecord, record_id)
         assert len(db.scalars(select(PresenzeShiftAssignment)).all()) == 1
-        assert shift_assignment_values(day)["shift_worker_type"] == "telecontrollo"
+        assert shift_assignment_values(day)["shift_worker_type"] == "adduttore"
         with pytest.raises(ShiftAssignmentConflict):
             record_shift_assignment(
                 db,
@@ -82,8 +86,13 @@ def test_shift_migration_and_concurrent_retry_preserve_gate_authority(operations
         assert day.ordinary_minutes == 420
     with operations_engine.begin() as conn:
         with Operations.context(MigrationContext.configure(conn)):
+            with pytest.raises(RuntimeError, match="Adduttore"):
+                adduttore.downgrade()
+            conn.execute(PresenzeShiftAssignment.__table__.delete())
+            adduttore.downgrade()
             migration.downgrade()
         assert "presenze_shift_assignments" not in inspect(conn).get_table_names()
         assert conn.execute(select(PresenzeDailyRecord.ordinary_minutes)).scalar_one() == 420
         with Operations.context(MigrationContext.configure(conn)):
             migration.upgrade()
+            adduttore.upgrade()

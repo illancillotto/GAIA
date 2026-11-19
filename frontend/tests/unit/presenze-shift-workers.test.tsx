@@ -19,10 +19,10 @@ it("saves the full month and prevents duplicate submissions", async () => {
  let resolve!: (value: PresenzeDailyRecord) => void;
  m.request.mockReturnValue(new Promise<PresenzeDailyRecord>(r => { resolve = r; }));
  const saved = vi.fn(); render(<ShiftWorkerControl record={record} disabled={false} onSaved={saved} />);
- fireEvent.change(screen.getByLabelText("Tipologia turnista"), { target: { value: "telecontrollo" } });
+ fireEvent.change(screen.getByLabelText("Tipologia turnista"), { target: { value: "adduttore" } });
  fireEvent.click(screen.getByText("Tutto il mese")); fireEvent.click(screen.getByText("Salva turnista")); fireEvent.click(screen.getByText("Salva turnista"));
  expect(m.request).toHaveBeenCalledOnce();
- expect(JSON.parse(m.request.mock.calls[0][1].body)).toEqual({ shift_worker_type: "telecontrollo", date_from: "2026-10-01", date_to: "2026-10-31" });
+ expect(JSON.parse(m.request.mock.calls[0][1].body)).toEqual({ shift_worker_type: "adduttore", date_from: "2026-10-01", date_to: "2026-10-31" });
  expect(screen.getByRole("status")).toHaveTextContent("Salvataggio");
  await act(async () => resolve(record)); expect(saved).toHaveBeenCalledWith(record);
 });
@@ -51,6 +51,7 @@ it("shows a T badge with the selected type only on shift days", () => {
  const view = render(<ShiftWorkerBadge record={record} />); expect(screen.queryByText("T")).toBeNull();
  view.rerender(<ShiftWorkerBadge record={{...record, shift_worker_type: "acquaiolo"}} />); expect(screen.getByText("T")).toHaveAttribute("title", "Turnista acquaiolo");
  view.rerender(<ShiftWorkerBadge record={{...record, shift_worker_type: "telecontrollo"}} />); expect(screen.getByText("T")).toHaveAttribute("title", "Turnista telecontrollo");
+ view.rerender(<ShiftWorkerBadge record={{...record, shift_worker_type: "adduttore"}} />); expect(screen.getByText("T")).toHaveAttribute("title", "Turnista adduttore");
  view.rerender(<ShiftWorkerBadge record={{...record, shift_worker_type: "tecnico_turnista"}} />); expect(screen.getByText("T")).toHaveAttribute("title", "Tecnico/Turnista");
 });
 it("defaults records from an older snapshot to non-turnista", () => {

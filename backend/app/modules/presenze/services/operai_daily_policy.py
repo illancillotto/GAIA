@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from datetime import time
+from dataclasses import dataclass, replace
+from datetime import date, time
 
 from app.modules.presenze.models import (
     PresenzeDailyPunch,
@@ -80,6 +80,10 @@ def recognized_daily_minutes(
     *,
     scheduled_start: time | None = None,
 ) -> RecognizedOperaiMinutes | None:
+    return recognized_record_minutes(None, punches, rule, scheduled_start=scheduled_start)
+
+
+def recognized_record_minutes(record, punches, rule, *, scheduled_start=None):
     start = (
         _minute(scheduled_start)
         if scheduled_start is not None
@@ -93,11 +97,50 @@ def recognized_daily_minutes(
     if not pairs or end > 1440:
         return None
     unpaid = _lunch_intervals(pairs, start, rule.expected_minutes)
-    return recognize_operai_day(
+    shift = DayMinuteInterval(start, end)
+    result = recognize_operai_day(
         pairs,
-        shift=DayMinuteInterval(start, end),
+        shift=shift,
         overtime_step_minutes=1,
         unpaid_intervals=unpaid,
+    )
+    return _credit_early_exit(result, pairs, shift, _ordinary_entry_flex(record, start, end))
+
+
+def _ordinary_entry_flex(record, start, end):
+    if record is None or record.work_date < date(2026, 9, 7):
+        return 0
+    raw = record.raw_payload_json
+    if not isinstance(raw, dict):
+        return 0
+    kind = raw.get("detail_schedule_type")
+    slots = raw.get("detail_time_slots")
+    if not kind and not slots:
+        return _effective_code_flex(raw.get("detail_effective_schedule"), record.schedule_code, start)
+    slot = f"{start // 60:02}:{start % 60:02}-{end // 60:02}:{end % 60:02}"
+    return 5 if kind == "Flessibile" and "".join(str(slots).split()) == slot else 0
+
+
+def _effective_code_flex(description, daily_code, start):
+    # Some regular INAZ days only carry the effective FLEX schedule description.
+    code = parse_schedule_code_from_detail(description)
+    if not code or code != daily_code or SCHEDULE_STARTS.get(code) != start:
+        return 0
+    return 5 if re.search(r"\bFLEX\b", description, flags=re.IGNORECASE) else 0
+
+
+def _credit_early_exit(result, punches, shift, flex):
+    if not flex or not result.missing_minutes:
+        return result
+    early_band = range(shift.start - flex, shift.start)
+    worked_in_band = {minute for minute in early_band if any(p.start <= minute < p.end for p in punches)}
+    early_exit = max(0, shift.end - max(p.end for p in punches))
+    credit = min(len(worked_in_band), early_exit, result.missing_minutes)
+    return replace(
+        result,
+        ordinary_minutes=result.ordinary_minutes + credit,
+        missing_minutes=result.missing_minutes - credit,
+        excluded_early_minutes=result.excluded_early_minutes - credit,
     )
 
 

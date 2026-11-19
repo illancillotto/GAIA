@@ -1,12 +1,21 @@
-"""Technician shifts follow INAZ theory; legacy shift profiles retain seven hours."""
+"""Technician and Adduttore shifts use the daily INAZ theory."""
 
-from app.modules.presenze.services.personnel_profiles import TECHNICIAN_PROFILE, technician_profile
+from app.modules.presenze.services.personnel_profiles import (
+    TECHNICIAN_PROFILE,
+    technician_profile,
+)
+from app.modules.presenze.services.shift_assignments import shift_assignment_values
+
+INAZ_SHIFT_TYPES = {TECHNICIAN_PROFILE, "adduttore"}
 
 
 def shift_ordinary_limit(record):
-    if technician_profile(record) is None:
-        return 420
-    minutes = getattr(record, "teo_minutes", None)
+    if technician_profile(record) is not None or shift_assignment_values(record)["shift_worker_type"] == "adduttore":
+        return _valid_inaz_minutes(getattr(record, "teo_minutes", None))
+    return 420
+
+
+def _valid_inaz_minutes(minutes):
     return minutes if type(minutes) is int and 0 < minutes <= 1440 else None
 
 
@@ -57,7 +66,7 @@ def shift_quality_values(record, punches):
     covered = min(expected or 0, shift_covered_absence_minutes(record))
     missing = max(0, (expected or 0) - (worked or 0) - covered)
     status = shift_status(punches, worked, missing) if expected is not None else "blocking"
-    formula = "TURNISTA_INAZ" if kind == TECHNICIAN_PROFILE else "TURNISTA_7H"
+    formula = "TURNISTA_INAZ" if kind in INAZ_SHIFT_TYPES else "TURNISTA_7H"
     notes = shift_operational_notes(record, kind, worked, expected)
     return dict(
         status=status,
@@ -76,16 +85,17 @@ def shift_operational_notes(record, kind, worked, expected):
         shift_voucher_travel_review,
     )
 
-    notes = [
-        f"Turnista {kind}: teorico INAZ {expected} minuti"
-        if kind == TECHNICIAN_PROFILE
-        else f"Turnista {kind}: 7 ore per turno, orari da timbrature INAZ"
-    ]
-    notes.extend(shift_punch_notes(worked, expected == 0))
-    if expected is None:
-        notes.append("Teorico INAZ mancante: calcolo turno da verificare")
+    notes = [_shift_theory_note(kind, expected), *shift_punch_notes(worked, expected == 0)]
     if record.work_date.isoformat() >= "2026-09-07":
         notes.append("Nessuna flessibilita in ingresso per i turnisti (accordo art. 7)")
     if shift_voucher_travel_review(record):
         notes.append("Buono da verificare: accertare rimborso vitto in trasferta (accordo art. 5)")
     return notes
+
+
+def _shift_theory_note(kind, expected):
+    if expected is None:
+        return "Teorico INAZ mancante: calcolo turno da verificare"
+    if kind in INAZ_SHIFT_TYPES:
+        return f"Turnista {kind}: teorico INAZ {expected} minuti"
+    return f"Turnista {kind}: 7 ore per turno, orari da timbrature INAZ"

@@ -10,7 +10,7 @@ from app.modules.presenze.services.inaz_assigned_calendar import (
 from app.modules.presenze.services.operai_daily_policy import (
     AssignedDaySchedule,
     _complete_day_pairs,
-    recognized_daily_minutes,
+    recognized_record_minutes,
 )
 from app.modules.presenze.services.operai_recognized_minutes import RecognizedOperaiMinutes
 from app.modules.presenze.services.operai_rules import (
@@ -72,7 +72,7 @@ def build_operai_day_policy(rule, record, punches, schedule: AssignedDaySchedule
     start = schedule.start_for(record, rule)
     return OperaiDayPolicy(
         rule,
-        recognized_daily_minutes(punches, rule, scheduled_start=start),
+        recognized_record_minutes(record, punches, rule, scheduled_start=start),
         individual_saturday,
     )
 

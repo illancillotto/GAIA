@@ -66,6 +66,25 @@ def simple(kind="acquaiolo", punches=None, **extra):
     )
 
 
+@pytest.mark.parametrize("theory,ordinary,extra", [(390, 390, 30), (450, 420, 0), (None, None, None)])
+def test_adduttore_daily_inaz_theory(theory, ordinary, extra):
+    punches = [punch("06:00", "13:00")]
+    record = simple("adduttore", punches, teo_minutes=theory)
+    quality = shift_quality(record, punches)
+    assert quality.formula_code == "TURNISTA_INAZ"
+    assert quality.expected_minutes == theory
+    expected_note = (
+        "Teorico INAZ mancante: calcolo turno da verificare"
+        if theory is None
+        else f"Turnista adduttore: teorico INAZ {theory} minuti"
+    )
+    assert quality.notes[0] == expected_note
+    assert quality.status == ("ok" if theory == 390 else "blocking")
+    result = shift_classification(record, punches, special_day=False, holiday_kind=None, grants_recovery_day=False)
+    assert (result.ordinary_minutes, result.extra_minutes) == (ordinary, extra)
+    assert shift_meal_voucher(record)
+
+
 @pytest.mark.parametrize("kind", ["acquaiolo", "telecontrollo"])
 @pytest.mark.parametrize(
     "entry,exit,night", [("06:00", "13:00", 0), ("14:00", "21:00", 0), ("22:00", "05:00", 420)]
@@ -181,7 +200,8 @@ def test_assignment_validation(data):
 
 
 @pytest.mark.parametrize("transport", ["lan", "outbound"])
-def test_gate_dated_assignment_persists_and_overrides_gaia(transport):
+@pytest.mark.parametrize("kind,theory", [("telecontrollo", 420), ("adduttore", 390)])
+def test_gate_dated_assignment_persists_and_overrides_gaia(transport, kind, theory):
     actor = _create_user("shift-" + transport)
     rid, cid = _record(actor.id)
     headers = {"Authorization": "Bearer " + _login(actor.username)}
@@ -191,7 +211,7 @@ def test_gate_dated_assignment_persists_and_overrides_gaia(transport):
     assert response.json()["shift_worker_source"] == "gaia"
     gate = {
         **request,
-        "shift_worker_type": "telecontrollo",
+        "shift_worker_type": kind,
         "gate_shift_requested_at": "2026-10-02T12:00:00Z",
         "gate_shift_command_id": str(uuid.uuid4()),
     }
@@ -220,6 +240,7 @@ def test_gate_dated_assignment_persists_and_overrides_gaia(transport):
     with TestingSessionLocal() as db:
         assert len(db.scalars(select(PresenzeShiftAssignment)).all()) == 2
         record = db.get(PresenzeDailyRecord, rid)
+        record.teo_minutes = theory
         db.add(
             PresenzeDailyPunch(
                 daily_record_id=rid, sequence=1, entry_time=time(14), exit_time=time(21)
@@ -235,12 +256,12 @@ def test_gate_dated_assignment_persists_and_overrides_gaia(transport):
         )
         db.add(future)
         db.flush()
-        assert shift_assignment_values(future)["shift_worker_type"] == "telecontrollo"
+        assert shift_assignment_values(future)["shift_worker_type"] == kind
         payload = build_presenze_giornaliere_push_payload(db, month="2026-10")
         day = next(r for r in payload["giornaliere"] if r["record_id"] == str(rid))
-        assert day["shift_worker_type"] == "telecontrollo"
+        assert day["shift_worker_type"] == kind
         assert day["meal_voucher_count"] == 1
-        assert day["export_ordinary_minutes"] == 420
+        assert day["export_ordinary_minutes"] == theory
         stamp = datetime(2026, 10, 2, 12, tzinfo=UTC)
         removal = ShiftWorkerAssignmentRequest(
             shift_worker_type="none", date_from=future.work_date, date_to=future.work_date
@@ -254,7 +275,7 @@ def test_gate_dated_assignment_persists_and_overrides_gaia(transport):
             ),
         )
         assert shift_assignment_values(future)["shift_worker_type"] == "none"
-        assert shift_assignment_values(record)["shift_worker_type"] == "telecontrollo"
+        assert shift_assignment_values(record)["shift_worker_type"] == kind
         with pytest.raises(ShiftAssignmentConflict):
             record_shift_assignment(
                 db,

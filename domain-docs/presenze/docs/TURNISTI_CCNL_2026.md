@@ -30,7 +30,7 @@ interpretati come configurazioni di singoli dipendenti.
 | CCNL 47 | Sabato non festivo per il solo giorno della settimana | Calendario GAIA: sabato feriale salvo festività effettiva |
 | CCNL 49/83/137 | Notturno 22:00–06:00 | Conteggio per minuto; soglie 22:00 e 06:00 esatte |
 | CCNL 83 | Festivo/domenicale distinto dal feriale | Ogni minuto segue il giorno civile, anche dopo mezzanotte |
-| Accordo 2.2.b | Buono per almeno 7 ore ordinarie in turno | 419 minuti: zero; 420 minuti: uno; timbrature incomplete/overlap: zero automatico |
+| Accordo 2.2.b | Buono per almeno 7 ore effettivamente lavorate in turno | 419 minuti: zero; 420 minuti: uno; timbrature incomplete/overlap: zero automatico |
 | Accordo 3 | Valore nominale del buono €7 | Informazione contrattuale; nessuna conversione del diritto in denaro |
 | Accordo 5.a | Nessun buono per giornata di assenza | Assenza e riposo senza lavoro non producono buono; giustificativi non diventano ore lavorate |
 | Accordo 5.b | Escluso se il vitto in trasferta è rimborsato | Trasferta segnalata: diritto automatico sospeso in attesa di verifica; non si presume il rimborso dal solo numero di minuti |
@@ -38,7 +38,8 @@ interpretati come configurazioni di singoli dipendenti.
 | OdS | Buoni dal 26/08/2026 | Nessun diritto automatico derivato dal nuovo accordo prima di tale data; manuali preservati |
 | CCNL 80/137 | Straordinario preventivamente autorizzato | Eccedenza distinta e metadato di autorizzazione necessaria; nessun importo retributivo generato |
 
-Il teorico locale preesistente di **420 minuti** viene mantenuto. Il requisito
+Il teorico di **420 minuti** vale per Acquaiolo e Telecontrollo. Adduttore
+e i giorni di turno del Tecnico/Turnista seguono il teorico giornaliero INAZ. Il requisito
 “almeno sette ore” dell’accordo è una soglia per il buono, non la definizione
 universale della durata del turno. CCNL 47 disciplina l’orario settimanale e le
 medie: non si deduce che tutte le ore oltre sette in una singola giornata siano

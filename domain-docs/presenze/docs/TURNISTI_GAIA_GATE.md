@@ -6,29 +6,35 @@ Per lo stato del rilascio precedente vedere il report operativo GATE
 
 Nelle Giornaliere GATE, **Gestisci turnisti** permette di selezionare collaboratore,
 tipologia e date. Le date iniziali coprono tutto il mese; due date uguali assegnano
-un singolo giorno. Tipologie iniziali: `acquaiolo`, `telecontrollo`, `none`.
+un singolo giorno. Le tipologie disponibili sono Acquaiolo, Adduttore, Telecontrollo,
+Tecnico/Turnista e Non turnista. GATE mostra le date in `gg/mm/aaaa` e invia
+date ISO. L’amministratore limitato può scegliere i membri e i responsabili
+delle proprie squadre. La sola presenza in una giornaliera di squadra non
+abilita l’assegnazione al collaboratore.
 GAIA offre lo stesso controllo nel dettaglio della giornaliera e una T nella matrice.
 
 ## Regole
 
-- Il teorico locale configurato è 420 minuti. Il buono automatico richiede
-  almeno 420 minuti ordinari effettivi dal 26/08/2026.
-- Timbrature INAZ complete e positive attestano il turno. Durata inferiore a 7 ore:
-  ore mancanti da verificare, nessun buono automatico. Timbrature mancanti, incomplete o
+- Acquaiolo e Telecontrollo usano 420 minuti. Adduttore e i giorni di turno
+  del Tecnico/Turnista usano il teorico INAZ giornaliero. Un teorico assente
+  richiede verifica. Dal 26/08/2026 la soglia del buono è di 420 minuti
+  effettivamente lavorati, anche quando parte del lavoro cade oltre il teorico.
+- Timbrature INAZ complete e positive attestano il turno. Una durata inferiore al teorico lascia minuti mancanti.
+  Sotto 420 minuti lavorati il buono automatico vale zero. Timbrature mancanti, incomplete o
   sovrapposte: verifica bloccante e nessun buono automatico.
 - Buono manuale e buono da turno danno complessivamente un solo buono nella giornata.
 - Mattina e sera usano la stessa durata; non si deduce un'entrata obbligatoria né
   una pausa non timbrata. L'alternanza settimanale comunicata non richiede di
   cambiare il flag ogni settimana. Senza calendario e settimana di partenza
   attestati non si genera un'anomalia di rotazione presunta.
-- Si preservano le categorie di ore notturne/festive. Oltre le 7 ore, i minuti
+- Si preservano le categorie di ore notturne/festive. Oltre il teorico applicabile, i minuti
   sono separati come eccedenza: rimangono applicabili i controlli ordinari
   sull'autorizzazione dello straordinario.
 - Una giornata senza timbrature con codice INAZ SAB/DOM/RIPTURN/SMONTO è riposo,
   senza ore lavorate né buono. Le assenze seguono il riconoscimento INAZ già
   esistente; non si accetta un generico numero di minuti come giustificazione.
-- Le due tipologie condividono le regole iniziali. Eventuali eccezioni future
-  richiederanno regole esplicite e test per la tipologia interessata.
+- Un’assegnazione esplicita Adduttore vale anche per un tecnico in una giornata
+  ordinaria OPE. La revoca esplicita conserva la precedenza sul profilo.
 
 ## Persistenza e precedenza
 
@@ -50,7 +56,13 @@ dalla revisione `20261002_1030`. La catena è stata rilasciata, insieme alla nuo
 locali: i rilasci mirati hanno preservato ed escluso il lavoro degli altri team.
 
 
-## Verifica corrente
+La revisione `20261119_1600` estende il vincolo sui tipi di assegnazione nel
+ramo Alembic Presenze dopo `20261119_1200`. Il downgrade si ferma se esistono
+assegnazioni Adduttore. L’API LAN e il job outbound applicano lo stesso comando
+datato. Prima del rilascio della console GATE, entrambi i consumer e il
+database devono accettare il nuovo tipo.
+
+## Verifiche storiche di ottobre
 
 Esiti, coverage full-file, matrice comportamento→test e problemi residui sono nel
 [report coordinato](TURNISTI_COORDINATED_VERIFICATION_2026-10-05.md).
@@ -100,7 +112,7 @@ scadenza. È **DONE**: rilascio e inserimento reale completati, snapshot settemb
 e ottobre verificati e agosto senza flag. Il dettaglio dei controlli è nel
 [report assegnazioni permanenti](TURNISTI_OPEN_ENDED_2026-10-05.md).
 
-## Piano e residui
+## Piano storico del ciclo di ottobre
 
 - [x] Modelli, API, regole, sincronizzazione, UI e test implementati e rilasciati.
 - [x] Review architetturale: nessuna dipendenza applicativa nuova, nessuno stack parallelo.

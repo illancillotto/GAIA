@@ -284,6 +284,8 @@ def test_ope_rest_revocation_missing_theory_and_short_shift():
     record.shift_worker_type = "telecontrollo"
     record.shift_worker_source = "gate"
     assert shift_worker_type(record) is None
+    record.shift_worker_type = "adduttore"
+    assert shift_worker_type(record) == "adduttore"
     record.schedule_code = "TELEC_1"
     record.shift_worker_type = "none"
     assert shift_worker_type(record) is None

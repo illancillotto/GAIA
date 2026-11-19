@@ -18,6 +18,7 @@ from app.modules.presenze.services.operai_daily_policy import (
     AssignedDaySchedule,
     effective_extra_values,
     recognized_daily_minutes,
+    recognized_record_minutes,
 )
 from app.modules.presenze.services.operai_rules import resolve_operai_rule
 from app.modules.presenze.services.operational_quality import build_daily_operational_quality
@@ -373,3 +374,54 @@ def test_explicit_seven_hour_shift_on_saturday_excludes_early_minutes(code):
     assert result.ordinary_minutes == 420
     assert result.extra_minutes == 0
     assert result.recognized_minutes.excluded_early_minutes == 20
+
+
+@pytest.mark.parametrize(
+    ("entry", "exit_time", "ordinary", "extra"),
+    [
+        (time(6, 46), time(13, 55), 420, 0),
+        (time(6, 46), time(13, 54), 419, 0),
+        (time(6, 58), time(13, 55), 417, 0),
+        (time(7), time(13, 55), 415, 0),
+        (time(6, 46), time(14, 15), 420, 15),
+    ],
+)
+def test_flexible_operaio_compensates_early_departure_only(entry, exit_time, ordinary, extra):
+    collaborator, record, punches = _day(pairs=((entry, exit_time),))
+    record.work_date = date(2026, 11, 9)
+    record.raw_payload_json = {"detail_schedule_type": "Flessibile", "detail_time_slots": "07:00 - 14:00"}
+    classification = classify_daily_record(collaborator, record, punches, None)
+    assert classification.ordinary_minutes == ordinary
+    assert classification.extra_minutes == extra
+    quality = build_daily_operational_quality(collaborator, record, punches)
+    assert quality.worked_minutes == ordinary + extra
+    assert quality.missing_minutes == 420 - ordinary
+
+
+@pytest.mark.parametrize("when,slots,kind", [
+    (date(2026, 9, 6), "07:00 - 14:00", "Flessibile"),
+    (date(2026, 11, 9), "06:00 - 13:00", "Flessibile"),
+    (date(2026, 11, 9), "07:00 - 14:00", "Rigido"),
+])
+def test_flex_requires_matching_attested_slot_and_effective_date(when, slots, kind):
+    collaborator, record, punches = _day(pairs=((time(6, 46), time(13, 55)),))
+    record.work_date = when
+    record.raw_payload_json = {"detail_schedule_type": kind, "detail_time_slots": slots}
+    rule = resolve_operai_rule(collaborator, record)
+    if when.weekday() == 6:
+        rule = replace(rule, expected_minutes=420)
+    assert recognized_record_minutes(record, punches, rule).ordinary_minutes == 415
+
+
+@pytest.mark.parametrize("description,ordinary", [
+    ("OPE0714 - (EXNO)FLEX OPE 7 ore x 5 gg", 420),
+    ("OPE0714 - ORDINARIO", 415),
+    ("OPE0613 - FLEX OPE", 415),
+    (None, 415),
+])
+def test_operaio_effective_flex_code_when_slot_is_absent(description, ordinary):
+    collaborator, record, punches = _day(pairs=((time(6, 46), time(13, 55)),))
+    record.raw_payload_json = {"detail_effective_schedule": description}
+    classification = classify_daily_record(collaborator, record, punches, None)
+    assert classification.ordinary_minutes == ordinary
+    assert classification.extra_minutes == 0

@@ -26,6 +26,19 @@ oltre 05:30 ed entro 06:00, ultima uscita fra 13:00 e 22:00 incluse. Il caso
 minuti anticipati. Le coppie incomplete/notturne non vengono trasformate in
 turni diurni; impiegati e codici sconosciuti mantengono il percorso esistente.
 
+
+## Compensazione dell’uscita anticipata
+
+Dal 7 settembre 2026, per gli operai diurni con flessibilità attestata, GAIA
+riconosce i minuti lavorati nei cinque minuti prima dell’ingresso fino a
+compensare l’uscita anticipata e i minuti ordinari mancanti. Il dettaglio INAZ
+deve indicare una fascia flessibile coerente con il turno. Se mancano sia il
+tipo sia la fascia, vale la descrizione effettiva FLEX con codice e inizio
+corrispondenti. L’anticipo eccedente resta escluso e non genera straordinario.
+Per OPE0714, la coppia 06:46–13:55 copre 420 minuti ordinari, di cui cinque
+riconosciuti nella finestra 06:55–07:00. Il controllo GATE per IMP1 considera
+invece dieci minuti prima dell’ingresso previsto alle 07:30.
+
 ## Estensione del 16 settembre: sabati dei capi operai
 
 La [rotazione individuale ogni 14 giorni](CAPI_OPERAI_SABATI_ALTERNATI.md)
