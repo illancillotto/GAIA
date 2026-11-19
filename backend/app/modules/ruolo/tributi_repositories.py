@@ -8,6 +8,7 @@ import tempfile
 import unicodedata
 import uuid
 from collections import defaultdict
+from collections.abc import Iterator
 from contextlib import suppress
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -19,6 +20,7 @@ import sqlalchemy as sa
 from openpyxl import load_workbook
 from sqlalchemy import String, and_, case, cast, desc, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from app.modules.ruolo.enums import (
@@ -798,6 +800,43 @@ def _notice_notification_payload(notice_row: dict[str, Any]) -> dict[str, Any]:
     return {"documented_pec_delivery": has_documented_pec_delivery(detail), "mailing_delivery": delivery}
 
 
+def _incass_notice_candidates(db: Session, keys: list[tuple[str, str]]) -> Iterator[RowMapping]:
+    normalized_notice_tax = func.upper(
+        func.replace(
+            func.coalesce(AnagraficaPaymentNotice.codice_fiscale, AnagraficaPaymentNotice.partita_iva, ""),
+            " ",
+            "",
+        )
+    ).label("normalized_tax_code")
+    for start in range(0, len(keys), EFFECTIVE_FILTER_SCAN_CHUNK_SIZE):
+        requested = (
+            sa.values(sa.column("anno", String), sa.column("tax", String))
+            .data(keys[start : start + EFFECTIVE_FILTER_SCAN_CHUNK_SIZE])
+            .cte("requested_notices")
+        )
+        yield from db.execute(
+            select(
+                AnagraficaPaymentNotice.anno,
+                normalized_notice_tax,
+                AnagraficaPaymentNotice.source_notice_id,
+                AnagraficaPaymentNotice.detail_url,
+                AnagraficaPaymentNotice.stato_label,
+                AnagraficaPaymentNotice.importo_carico,
+                AnagraficaPaymentNotice.importo_riscosso,
+                AnagraficaPaymentNotice.importo_residuo,
+                AnagraficaPaymentNotice.importo_rateizzato,
+                AnagraficaPaymentNotice.raw_detail_json["mailing_list"].label("mailing_list"),
+                AnagraficaPaymentNotice.updated_at,
+            )
+            .join(requested, and_(AnagraficaPaymentNotice.anno == requested.c.anno, normalized_notice_tax == requested.c.tax))
+            .where(
+                AnagraficaPaymentNotice.source_system == "incass",
+                AnagraficaPaymentNotice.detail_url.is_not(None),
+            )
+            .order_by(desc(AnagraficaPaymentNotice.updated_at))
+        ).mappings()
+
+
 def _batch_load_incass_notice_links(
     db: Session,
     *,
@@ -817,42 +856,8 @@ def _batch_load_incass_notice_links(
     if not rows_by_key:
         return notices_by_avviso_id
 
-    normalized_notice_tax = func.upper(
-        func.replace(
-            func.coalesce(AnagraficaPaymentNotice.codice_fiscale, AnagraficaPaymentNotice.partita_iva, ""),
-            " ",
-            "",
-        )
-    ).label("normalized_tax_code")
-    requested = (
-        sa.values(sa.column("anno", String), sa.column("tax", String))
-        .data(list(rows_by_key))
-        .cte("requested_notices")
-    )
-    notice_rows = db.execute(
-        select(
-            AnagraficaPaymentNotice.anno,
-            normalized_notice_tax,
-            AnagraficaPaymentNotice.source_notice_id,
-            AnagraficaPaymentNotice.detail_url,
-            AnagraficaPaymentNotice.stato_label,
-            AnagraficaPaymentNotice.importo_carico,
-            AnagraficaPaymentNotice.importo_riscosso,
-            AnagraficaPaymentNotice.importo_residuo,
-            AnagraficaPaymentNotice.importo_rateizzato,
-            AnagraficaPaymentNotice.raw_detail_json["mailing_list"].label("mailing_list"),
-            AnagraficaPaymentNotice.updated_at,
-        )
-        .join(requested, and_(AnagraficaPaymentNotice.anno == requested.c.anno, normalized_notice_tax == requested.c.tax))
-        .where(
-            AnagraficaPaymentNotice.source_system == "incass",
-            AnagraficaPaymentNotice.detail_url.is_not(None),
-        )
-        .order_by(desc(AnagraficaPaymentNotice.updated_at))
-    ).mappings().all()
-
     notices_grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for notice_row in notice_rows:
+    for notice_row in _incass_notice_candidates(db, list(rows_by_key)):
         notices_grouped[(str(notice_row["anno"] or ""), str(notice_row["normalized_tax_code"] or ""))].append(notice_row)
 
     for key, avvisi_for_key in rows_by_key.items():

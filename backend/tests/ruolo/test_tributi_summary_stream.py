@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from uuid import UUID
 
 from sqlalchemy import event
@@ -87,3 +88,51 @@ def test_summary_stream_visits_each_notice_once_and_keeps_channel_precedence(mon
         assert visited == expected_sample
         assert partial["summary_scanned_count"] == partial["summary_scan_limit"] == 3
         assert partial["summary_partial"] is True
+
+
+def test_incass_lookup_bounds_bind_count_for_large_reminder_batches(monkeypatch):
+    rows = [
+        (
+            SimpleNamespace(
+                id=UUID(int=i),
+                codice_cnc=f"C{i}",
+                anno_tributario=2024,
+                codice_fiscale_raw=f"KEY{i}",
+            ),
+            None,
+        )
+        for i in range(1, 6)
+    ]
+    with TestingSessionLocal() as db:
+        for i in range(1, 6):
+            db.add(
+                AnagraficaPaymentNotice(
+                    source_system="incass",
+                    source_notice_id=f"N{i}",
+                    anno="2024",
+                    codice_fiscale=f"KEY{i}",
+                    detail_url="/fixture",
+                )
+            )
+        db.commit()
+        batches = []
+
+        def record(_conn, _cursor, statement, parameters, _context, _many):
+            if "requested_notices" in statement:
+                batches.append(len(parameters))
+
+        monkeypatch.setattr(repo, "EFFECTIVE_FILTER_SCAN_CHUNK_SIZE", 2)
+        event.listen(db.get_bind(), "before_cursor_execute", record)
+        try:
+            notices = repo._batch_load_incass_notice_links(db, rows=rows)
+        finally:
+            event.remove(db.get_bind(), "before_cursor_execute", record)
+        assert [notices[UUID(int=i)]["source_notice_id"] for i in range(1, 6)] == [
+            "N1",
+            "N2",
+            "N3",
+            "N4",
+            "N5",
+        ]
+        assert len(batches) == 3
+        assert batches[0] == batches[1] == batches[2] + 2
