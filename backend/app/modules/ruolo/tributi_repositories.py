@@ -8,6 +8,7 @@ import tempfile
 import unicodedata
 import uuid
 from collections import defaultdict
+from collections.abc import Iterator
 from contextlib import suppress
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -15,9 +16,11 @@ from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
 
+import sqlalchemy as sa
 from openpyxl import load_workbook
 from sqlalchemy import String, and_, case, cast, desc, func, literal, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from app.modules.ruolo.enums import (
@@ -790,13 +793,48 @@ def _hydrate_incass_notice_row(notice_row: dict[str, Any] | Any | None) -> dict[
 
 
 def _notice_notification_payload(notice_row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "documented_pec_delivery": has_documented_pec_delivery(notice_row["raw_detail_json"]),
-        "mailing_delivery": _extract_incass_mailing_delivery(
-            source_notice_id=notice_row["source_notice_id"],
-            raw_detail_json=notice_row["raw_detail_json"],
-        ),
-    }
+    detail = {"mailing_list": notice_row["mailing_list"]}
+    delivery = _extract_incass_mailing_delivery(
+        source_notice_id=notice_row["source_notice_id"], raw_detail_json=detail
+    )
+    return {"documented_pec_delivery": has_documented_pec_delivery(detail), "mailing_delivery": delivery}
+
+
+def _incass_notice_candidates(db: Session, keys: list[tuple[str, str]]) -> Iterator[RowMapping]:
+    normalized_notice_tax = func.upper(
+        func.replace(
+            func.coalesce(AnagraficaPaymentNotice.codice_fiscale, AnagraficaPaymentNotice.partita_iva, ""),
+            " ",
+            "",
+        )
+    ).label("normalized_tax_code")
+    for start in range(0, len(keys), EFFECTIVE_FILTER_SCAN_CHUNK_SIZE):
+        requested = (
+            sa.values(sa.column("anno", String), sa.column("tax", String))
+            .data(keys[start : start + EFFECTIVE_FILTER_SCAN_CHUNK_SIZE])
+            .cte("requested_notices")
+        )
+        yield from db.execute(
+            select(
+                AnagraficaPaymentNotice.anno,
+                normalized_notice_tax,
+                AnagraficaPaymentNotice.source_notice_id,
+                AnagraficaPaymentNotice.detail_url,
+                AnagraficaPaymentNotice.stato_label,
+                AnagraficaPaymentNotice.importo_carico,
+                AnagraficaPaymentNotice.importo_riscosso,
+                AnagraficaPaymentNotice.importo_residuo,
+                AnagraficaPaymentNotice.importo_rateizzato,
+                AnagraficaPaymentNotice.raw_detail_json["mailing_list"].label("mailing_list"),
+                AnagraficaPaymentNotice.updated_at,
+            )
+            .join(requested, and_(AnagraficaPaymentNotice.anno == requested.c.anno, normalized_notice_tax == requested.c.tax))
+            .where(
+                AnagraficaPaymentNotice.source_system == "incass",
+                AnagraficaPaymentNotice.detail_url.is_not(None),
+            )
+            .order_by(desc(AnagraficaPaymentNotice.updated_at))
+        ).mappings()
 
 
 def _batch_load_incass_notice_links(
@@ -804,9 +842,6 @@ def _batch_load_incass_notice_links(
     *,
     rows: list[Any],
 ) -> dict[uuid.UUID, dict[str, Any]]:
-    if not rows:
-        return {}
-
     rows_by_key: dict[tuple[str, str], list[tuple[RuoloAvviso, RuoloTributiAvvisoStatus | None]]] = defaultdict(list)
     notices_by_avviso_id: dict[uuid.UUID, dict[str, Any]] = {}
     for row in rows:
@@ -821,40 +856,8 @@ def _batch_load_incass_notice_links(
     if not rows_by_key:
         return notices_by_avviso_id
 
-    normalized_notice_tax = func.upper(
-        func.replace(
-            func.coalesce(AnagraficaPaymentNotice.codice_fiscale, AnagraficaPaymentNotice.partita_iva, ""),
-            " ",
-            "",
-        )
-    ).label("normalized_tax_code")
-    years = sorted({key[0] for key in rows_by_key})
-    tax_codes = sorted({key[1] for key in rows_by_key})
-    notice_rows = db.execute(
-        select(
-            AnagraficaPaymentNotice.anno,
-            normalized_notice_tax,
-            AnagraficaPaymentNotice.source_notice_id,
-            AnagraficaPaymentNotice.detail_url,
-            AnagraficaPaymentNotice.stato_label,
-            AnagraficaPaymentNotice.importo_carico,
-            AnagraficaPaymentNotice.importo_riscosso,
-            AnagraficaPaymentNotice.importo_residuo,
-            AnagraficaPaymentNotice.importo_rateizzato,
-            AnagraficaPaymentNotice.raw_detail_json,
-            AnagraficaPaymentNotice.updated_at,
-        )
-        .where(
-            AnagraficaPaymentNotice.anno.in_(years),
-            AnagraficaPaymentNotice.source_system == "incass",
-            normalized_notice_tax.in_(tax_codes),
-            AnagraficaPaymentNotice.detail_url.is_not(None),
-        )
-        .order_by(desc(AnagraficaPaymentNotice.updated_at))
-    ).mappings().all()
-
     notices_grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for notice_row in notice_rows:
+    for notice_row in _incass_notice_candidates(db, list(rows_by_key)):
         notices_grouped[(str(notice_row["anno"] or ""), str(notice_row["normalized_tax_code"] or ""))].append(notice_row)
 
     for key, avvisi_for_key in rows_by_key.items():
@@ -1644,6 +1647,14 @@ def _batch_load_incass_mailing_delivery(
     return deliveries_by_avviso_id
 
 
+def _summary_registered_mail_ids(db: Session, rows: list[Any]) -> set[uuid.UUID]:
+    matched = select(RuoloTributiRegisteredMail.avviso_id).where(
+        RuoloTributiRegisteredMail.avviso_id.in_([row[0].id for row in rows]),
+        RuoloTributiRegisteredMail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value,
+    )
+    return set(db.scalars(matched))
+
+
 def get_tributi_summary(
     db: Session,
     *,
@@ -1679,7 +1690,13 @@ def get_tributi_summary(
     ).order_by(None)
 
     total_amount = _CURRENCY_ZERO
-    computed_rows: list[dict[str, Any]] = []
+    total_count = 0
+    pec_count = 0
+    pec_amount = _CURRENCY_ZERO
+    raccomandata_count = 0
+    raccomandata_amount = _CURRENCY_ZERO
+    to_send_count = 0
+    raccomandata_source_available = False
 
     offset = 0
     chunk_size = EFFECTIVE_FILTER_SCAN_CHUNK_SIZE
@@ -1689,85 +1706,55 @@ def get_tributi_summary(
         if requires_effective_payment_filter
         else None
     )
-    while True:
-        rows = db.execute(query.offset(offset).limit(chunk_size)).all()
-        if not rows:
-            break
-        effective_cores = _precompute_tributi_effective_cores(db, rows=rows)
+    if requires_effective_payment_filter:
+        # Keep the bounded dashboard sample selected by the existing SQL query.
+        result = db.execute(query.offset(0).limit(SUMMARY_EFFECTIVE_FILTER_SCAN_LIMIT))
+    else:
+        # One ordered cursor gives every notice exactly one position in a complete scan.
+        ordered = query.order_by(RuoloAvviso.anno_tributario, RuoloAvviso.id)
+        result = db.execute(ordered.execution_options(yield_per=chunk_size))
+    with result:
+        for rows in result.partitions(chunk_size):
+            registered_mail_ids = _summary_registered_mail_ids(db, rows)
+            effective_cores = _precompute_tributi_effective_cores(db, rows=rows)
 
-        for row in rows:
-            avviso: RuoloAvviso = row[0]
-            item = effective_cores[avviso.id]
-            if not _item_matches_effective_payment_filters(
-                item,
-                payment_status=payment_status,
-                open_only=open_only,
-            ):
-                continue
-            due_amount = _money_or_zero(item["adjusted_due_amount"])
-            saldo = _money(item["saldo_amount"])
-            total_amount += due_amount
-            computed_rows.append(
-                {
-                    "id": avviso.id,
-                    "due_amount": due_amount,
-                    "has_pec_delivery": item["mailing_delivery"] is not None,
-                    "is_sendable": (
-                        saldo is not None
-                        and saldo > _CURRENCY_ZERO
-                        and item["payment_status"] != RuoloTributiPaymentStatus.PAID.value
-                    ),
-                }
-            )
+            for row in rows:
+                avviso: RuoloAvviso = row[0]
+                item = effective_cores[avviso.id]
+                if not _item_matches_effective_payment_filters(
+                    item,
+                    payment_status=payment_status,
+                    open_only=open_only,
+                ):
+                    continue
+                due_amount = _money_or_zero(item["adjusted_due_amount"])
+                total_count += 1
+                total_amount += due_amount
+                has_registered_mail = avviso.id in registered_mail_ids
+                raccomandata_source_available |= has_registered_mail
+                if item["mailing_delivery"] is not None:
+                    pec_count += 1
+                    pec_amount += due_amount
+                    continue
+                if has_registered_mail:
+                    raccomandata_count += 1
+                    raccomandata_amount += due_amount
+                    continue
+                if _item_is_sendable_for_reminder(item):
+                    to_send_count += 1
 
-        offset += len(rows)
-        if len(rows) < chunk_size:
-            break
-        # Broad effective filters can span tens of thousands of notices and
-        # require inCASS hydration per row; keep the dashboard summary bounded.
-        if requires_effective_payment_filter and offset >= SUMMARY_EFFECTIVE_FILTER_SCAN_LIMIT:
-            break
+            offset += len(rows)
     summary_partial = sql_candidate_total is not None and offset < sql_candidate_total
-    registered_mail_avviso_ids = {
-        item
-        for item in db.scalars(
-            select(RuoloTributiRegisteredMail.avviso_id)
-            .where(
-                RuoloTributiRegisteredMail.avviso_id.in_([row["id"] for row in computed_rows]),
-                RuoloTributiRegisteredMail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value,
-            )
-            .distinct()
-        ).all()
-        if item is not None
-    } if computed_rows else set()
-    pec_count = 0
-    pec_amount = _CURRENCY_ZERO
-    raccomandata_count = 0
-    raccomandata_amount = _CURRENCY_ZERO
-    to_send_count = 0
-
-    for item in computed_rows:
-        has_pec_delivery = item["has_pec_delivery"]
-        has_registered_mail = item["id"] in registered_mail_avviso_ids
-        if has_pec_delivery:
-            pec_count += 1
-            pec_amount += item["due_amount"]
-        elif has_registered_mail:
-            raccomandata_count += 1
-            raccomandata_amount += item["due_amount"]
-        elif item["is_sendable"]:
-            to_send_count += 1
-
     return {
         "to_send_count": to_send_count,
         "sent_count": pec_count + raccomandata_count,
         "pec_count": pec_count,
         "raccomandata_count": raccomandata_count,
-        "total_count": len(computed_rows),
+        "total_count": total_count,
         "total_amount": _money_float(total_amount) or 0.0,
         "pec_amount": _money_float(pec_amount) or 0.0,
         "raccomandata_amount": _money_float(raccomandata_amount) or 0.0,
-        "raccomandata_source_available": bool(registered_mail_avviso_ids),
+        "raccomandata_source_available": raccomandata_source_available,
         "summary_partial": summary_partial,
         "summary_scan_limit": SUMMARY_EFFECTIVE_FILTER_SCAN_LIMIT if summary_partial else None,
         "summary_scanned_count": offset,
@@ -1936,7 +1923,7 @@ def _load_incass_notice_link(
             AnagraficaPaymentNotice.importo_riscosso,
             AnagraficaPaymentNotice.importo_residuo,
             AnagraficaPaymentNotice.importo_rateizzato,
-            AnagraficaPaymentNotice.raw_detail_json,
+            AnagraficaPaymentNotice.raw_detail_json["mailing_list"].label("mailing_list"),
         )
         .where(
             AnagraficaPaymentNotice.anno == str(avviso.anno_tributario),
