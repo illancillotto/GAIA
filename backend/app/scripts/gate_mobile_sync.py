@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 import httpx
 
 from app.core.config import Settings, settings
 from app.core.database import SessionLocal
+from app.services.gate_mobile_run_lease import GateMobileSyncBusy
 from app.services.gate_mobile_sync import execute_gate_mobile_sync
 
 logger = logging.getLogger("gaia.gate_mobile_sync")
@@ -33,14 +35,10 @@ async def _main() -> int:
         if result.status == "skipped":
             logger.info("gate-mobile sync skipped: run_id=%s reason=%s", result.run_id, result.error_message)
             return 0
-        logger.info(
-            "gate-mobile sync completed: run_id=%s tasks=%s catalogs_pushed=%s operators_pushed=%s worksets_pushed=%s",
-            result.run_id,
-            len(result.report.requested_tasks) if result.report is not None else 0,
-            result.report.catalogs_pushed if result.report is not None else 0,
-            result.report.operators_pushed if result.report is not None else 0,
-            result.report.worksets_pushed if result.report is not None else 0,
-        )
+        _log_success(result)
+        return 0
+    except GateMobileSyncBusy:
+        logger.info("gate-mobile sync skipped: another outbound cycle owns the lease")
         return 0
     except RuntimeError as exc:
         logger.error("gate-mobile sync configuration error: %s", exc)
@@ -63,13 +61,25 @@ async def _main() -> int:
         db.close()
 
 
+def _log_success(result) -> None:
+    report = result.report
+    logger.info(
+        "gate-mobile sync completed: run_id=%s tasks=%s catalogs_pushed=%s operators_pushed=%s worksets_pushed=%s",
+        result.run_id,
+        len(report.requested_tasks) if report else 0,
+        report.catalogs_pushed if report else 0,
+        report.operators_pushed if report else 0,
+        report.worksets_pushed if report else 0,
+    )
+
+
 def main() -> int:
     return asyncio.run(_main())
 
 
 def _detect_trigger_source(app_settings: Settings) -> str:
     if app_settings.app_env == "production":
-        return "systemd_timer_or_manual"
+        return os.environ.get("GATE_MOBILE_SYNC_TRIGGER_SOURCE", "systemd_timer_or_manual")
     return "manual_cli"
 
 

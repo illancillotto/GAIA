@@ -125,6 +125,7 @@ services:
     env_file:
       - .env
     environment:
+      GATE_MOBILE_SYNC_LOCK_PATH: /runtime-data/gate-mobile-sync.lock
       GIS_EXPORT_SCHEDULER_REGISTER_IN_API: "false"
       GIS_QGIS_SERVER_HEALTH_URL: http://qgis-server/ows/?MAP=/var/lib/qgis/gaia-gis-platform.qgs&SERVICE=WMS&REQUEST=GetCapabilities
       NETWORK_ARP_HELPER_BASE_URL: ${NETWORK_ARP_HELPER_BASE_URL:-http://host.docker.internal:9105}
@@ -229,6 +230,8 @@ services:
     env_file:
       - .env
     environment:
+      GATE_MOBILE_SYNC_LOCK_PATH: /runtime-data/gate-mobile-sync.lock
+      GATE_MOBILE_SYNC_TRIGGER_SOURCE: outbound_runner
       GATE_MOBILE_SYNC_INTERVAL_SECONDS: ${GATE_MOBILE_SYNC_INTERVAL_SECONDS:-300}
     entrypoint: []
     command: python -m app.scripts.gate_mobile_sync_runner

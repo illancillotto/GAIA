@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_role
 from app.core.database import get_db
-from app.services.gate_mobile_sync import execute_gate_mobile_sync, get_gate_mobile_sync_status, get_running_gate_mobile_sync_run
+from app.services.gate_mobile_sync import (
+    execute_gate_mobile_sync,
+    get_gate_mobile_sync_run,
+    get_gate_mobile_sync_status,
+)
 
 router = APIRouter(prefix="/mobile-gateway-sync", tags=["operazioni/mobile-gateway-sync"])
 
@@ -58,20 +62,8 @@ async def mobile_gateway_sync_run(
     _: Annotated[object, Depends(require_role("super_admin", "admin"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> GateMobileSyncRunTriggerResponse:
-    running_run = get_running_gate_mobile_sync_run(db)
-    if running_run is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Gate mobile sync già in esecuzione: run_id={running_run.id}",
-        )
-
-    result = await execute_gate_mobile_sync(
-        db,
-        trigger_source="manual_api",
-        raise_on_error=False,
-    )
-    payload = get_gate_mobile_sync_status(db, recent_limit=1)
-    job = payload["last_run"]
+    result = await execute_gate_mobile_sync(db, trigger_source="manual_api", raise_on_error=False)
+    job = get_gate_mobile_sync_run(db, result.run_id)
     if job is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

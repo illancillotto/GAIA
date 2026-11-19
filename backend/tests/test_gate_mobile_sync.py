@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, date, datetime, time
 
 import httpx
+import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -14,7 +15,10 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import Settings
 from app.core.database import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
+from app.modules.operazioni.models.gate_mobile_sync_run import (
+    GateMobileActionReceipt,
+    GateMobileSyncRun,
+)
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.schemas.operators import GateMobileConsoleUpdateRequest
@@ -1050,6 +1054,52 @@ def test_process_presenze_pending_actions_acks_and_fails_gateway_actions() -> No
 
         assert "/api/mobile/connector/presenze/pending-actions/pending-ok/ack" in calls
         assert db.get(PresenzeDailyRecord, daily_record_id).km_value == 12
+    finally:
+        db.close()
+
+
+def test_pending_action_replays_same_ack_after_transport_loss_without_reapplying():
+    db = _build_session()
+    try:
+        record_id = _seed_presenze_daily_record(db)
+        action = {
+            "pending_action_id": "lost-ack", "action_type": "patch_daily_record",
+            "record_id": str(record_id), "actor": {"gaia_user_id": 77}, "km_value": 12,
+        }
+        deliveries = []
+
+        def handler(request):
+            if request.method == "GET":
+                return httpx.Response(200, json=[action])
+            if request.url.path.endswith("/fail"):
+                assert not json.loads(request.content)["retryable"]
+                return httpx.Response(200)
+            deliveries.append(json.loads(request.content))
+            if len(deliveries) == 1:
+                raise httpx.ReadError("fixture response lost")
+            return httpx.Response(200)
+
+        async def deliver():
+            async with httpx.AsyncClient(base_url="http://fixture.invalid", transport=httpx.MockTransport(handler)) as client:
+                return await process_presenze_pending_actions(db, client=client, headers={})
+
+        action["payload_json"] = None
+        domain = {key: action.pop(key) for key in ("record_id", "actor", "km_value")}
+        action["payload"] = domain
+        with pytest.raises(httpx.ReadError):
+            asyncio.run(deliver())
+        action["payload_json"] = json.dumps(domain)
+        assert asyncio.run(deliver()) == {"acknowledged": 1, "failed": 0}
+        assert deliveries[0] == deliveries[1]
+        action["payload_json"] = None
+        domain["km_value"] = 19
+        assert asyncio.run(deliver()) == {"acknowledged": 0, "failed": 1}
+        del action["pending_action_id"]
+        with pytest.raises(ValueError, match="Identificatore stabile"):
+            asyncio.run(deliver())
+        record = db.get(PresenzeDailyRecord, record_id)
+        assert record.km_value == 12
+        assert len(record.raw_payload_json["_gate_audit"]) == 1
     finally:
         db.close()
 
@@ -2741,6 +2791,7 @@ def _build_session() -> Session:
         tables=[
             ApplicationUser.__table__,
             GateMobileSyncRun.__table__,
+            GateMobileActionReceipt.__table__,
             WCOperator.__table__,
             OperatorProfile.__table__,
             PresenzeCollaborator.__table__,

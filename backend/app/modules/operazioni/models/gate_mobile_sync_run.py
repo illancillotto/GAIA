@@ -19,7 +19,16 @@ class GateMobileSyncRun(Base):
     operators_pushed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     requested_tasks_json: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    lease_backend_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_kind: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class GateMobileActionReceipt(Base):
+    __tablename__ = "gate_mobile_action_receipt"
+
+    action_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    acknowledgement: Mapped[dict] = mapped_column(JSON, nullable=False)

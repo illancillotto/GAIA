@@ -79,6 +79,10 @@ from app.modules.presenze.services.operai_rules import (
     load_operai_rule_configs as load_operai_rule_configs,
 )
 from app.schemas.users import normalize_email
+from app.services.gate_mobile_action_receipt import apply_once
+from app.services.gate_mobile_run_lease import outbound_lease
+from app.services.gate_mobile_snapshot_push import push_monthly_snapshots
+from app.services.gate_mobile_snapshot_push import task_months as _task_months
 
 OPERATOR_UPDATE_ACTION_TYPE = "propose_operator_update"
 OPERATOR_UPDATE_OPERATIONS = {"create_operator", "update_operator", "update_operator_domains"}
@@ -462,29 +466,12 @@ async def run_gate_mobile_sync_once(
             push_response.raise_for_status()
             presenze_months_pushed = 1
 
-        presenze_giornaliere_pushed = 0
-        for task in [item for item in tasks if item.get("type") == "presenze_giornaliere"]:
-            for month in _task_months(task):
-                payload = build_presenze_giornaliere_push_payload(db, month=month)
-                push_response = await client.post(
-                    "/api/mobile/connector/presenze/giornaliere/snapshot",
-                    json=payload,
-                    headers=headers,
-                )
-                push_response.raise_for_status()
-                presenze_giornaliere_pushed += int(push_response.json().get("records", {}).get("count", len(payload["records"])))
-
-        presenze_anomalie_pushed = 0
-        for task in [item for item in tasks if item.get("type") == "presenze_anomalie"]:
-            for month in _task_months(task):
-                payload = build_presenze_anomalie_push_payload(db, month=month)
-                push_response = await client.post(
-                    "/api/mobile/connector/presenze/anomalie/snapshot",
-                    json=payload,
-                    headers=headers,
-                )
-                push_response.raise_for_status()
-                presenze_anomalie_pushed += int(push_response.json().get("anomalies", {}).get("count", len(payload["anomalies"])))
+        presenze_giornaliere_pushed = await push_monthly_snapshots(
+            db, client, headers, tasks, ("giornaliere", "records"), build_presenze_giornaliere_push_payload
+        )
+        presenze_anomalie_pushed = await push_monthly_snapshots(
+            db, client, headers, tasks, ("anomalie", "anomalies"), build_presenze_anomalie_push_payload
+        )
 
         pending_actions_acknowledged = 0
         pending_actions_failed = 0
@@ -519,9 +506,21 @@ async def execute_gate_mobile_sync(
     trigger_source: str = "manual_cli",
     raise_on_error: bool = True,
 ) -> GateMobileSyncExecutionResult:
+    with outbound_lease(db) as owner:
+        return await _execute_owned_sync(
+            db, app_settings=app_settings, client=client, trigger_source=trigger_source,
+            raise_on_error=raise_on_error, owner=owner,
+        )
+
+
+async def _execute_owned_sync(
+    db: Session, *, app_settings: Settings, client: httpx.AsyncClient | None,
+    trigger_source: str, raise_on_error: bool, owner: int | None,
+) -> GateMobileSyncExecutionResult:
     started_at = datetime.now(UTC)
     run = GateMobileSyncRun(
         trigger_source=trigger_source,
+        lease_backend_pid=owner,
         status="running",
         requested_tasks_count=0,
         operators_pushed=0,
@@ -638,6 +637,10 @@ def get_running_gate_mobile_sync_run(db: Session) -> GateMobileSyncRun | None:
     ).first()
 
 
+def get_gate_mobile_sync_run(db: Session, run_id: UUID) -> dict[str, Any] | None:
+    return _serialize_run(db.get(GateMobileSyncRun, run_id))
+
+
 async def process_presenze_pending_actions(db: Session, *, client: httpx.AsyncClient, headers: dict[str, str]) -> dict[str, int]:
     response = await client.get("/api/mobile/connector/presenze/pending-actions", headers=headers)
     response.raise_for_status()
@@ -646,9 +649,9 @@ async def process_presenze_pending_actions(db: Session, *, client: httpx.AsyncCl
     acknowledged = 0
     failed = 0
     for action in [item for item in actions if isinstance(item, dict)]:
-        action_id = _pending_action_id(action)
+        action_id = _queued_action_id(action)
         try:
-            result = _apply_presenze_pending_action(db, action)
+            result = apply_once(db, action, action_id, _pending_action_payload(action), _apply_presenze_pending_action)
         except PendingActionApplyError as exc:
             db.rollback()
             await _fail_pending_action(client, headers=headers, action_id=action_id, message=str(exc), retryable=exc.retryable)
@@ -1026,6 +1029,13 @@ async def _fail_pending_action(
     response.raise_for_status()
 
 
+def _queued_action_id(action: dict[str, Any]) -> str:
+    for field in ("id", "pending_action_id", "cloud_event_id", "client_request_id"):
+        if action.get(field):
+            return str(action[field])
+    raise ValueError("Identificatore stabile mancante nella pending action")
+
+
 def _pending_action_id(action: dict[str, Any]) -> str:
     value = action.get("id") or action.get("pending_action_id") or action.get("cloud_event_id") or action.get("client_request_id")
     if value is None:
@@ -1076,19 +1086,6 @@ def _ack_payload(entity_type: str, entity_id: Any, *, action_id: str) -> dict[st
             "applied_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
     }
-
-
-def _task_months(task: dict[str, Any]) -> list[str]:
-    if isinstance(task.get("months"), list) and task["months"]:
-        return [str(month) for month in task["months"]]
-    if task.get("month"):
-        return [str(task["month"])]
-    today = date.today()
-    current = today.strftime("%Y-%m")
-    previous_year = today.year if today.month > 1 else today.year - 1
-    previous_month = today.month - 1 if today.month > 1 else 12
-    previous = f"{previous_year:04d}-{previous_month:02d}"
-    return [current, previous]
 
 
 async def _fetch_sync_plan_tasks(client: httpx.AsyncClient, *, headers: dict[str, str]) -> list[dict[str, Any]]:

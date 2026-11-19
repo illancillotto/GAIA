@@ -2237,3 +2237,13 @@ def test_mobile_sync_teti_fault_work_request_returns_retryable_on_temporary_erro
     assert response.status_code == 500
     assert response.json()["error_code"] == "GAIA_RETRYABLE_ERROR"
     assert response.json()["retryable"] is True
+
+
+def test_manual_run_returns_error_when_specific_audit_row_is_missing(monkeypatch):
+    async def unavailable(*_args, **_kwargs):
+        return GateMobileSyncExecutionResult("succeeded", uuid4(), None)
+
+    monkeypatch.setattr(mobile_gateway_sync_routes, "execute_gate_mobile_sync", unavailable)
+    response = client.post("/operazioni/mobile-gateway-sync/run", headers=_seed_admin())
+    assert response.status_code == 500
+    assert "non trovato" in response.json()["detail"]
