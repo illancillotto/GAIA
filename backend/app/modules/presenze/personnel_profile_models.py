@@ -27,7 +27,8 @@ class PresenzePersonnelProfile(Base):
             "valid_to IS NULL OR valid_from <= valid_to", name="ck_personnel_profile_dates"
         ),
         CheckConstraint(
-            "personnel_area IN ('AGRARIO', 'IMPIANTI', 'CATASTO')", name="ck_personnel_profile_area"
+            "personnel_area IN ('AGRARIO', 'IMPIANTI', 'CATASTO', 'AMMINISTRATIVA')",
+            name="ck_personnel_profile_area",
         ),
         CheckConstraint(
             "employment_relationship IN ('indeterminato', 'determinato', 'avventizio')",

@@ -338,7 +338,7 @@ def _record_collaborator_values(
 
 
 def required_personnel_area(value: Any, *, entity: str) -> str:
-    if value not in {"AGRARIO", "IMPIANTI", "CATASTO"}:
+    if value not in {"AGRARIO", "IMPIANTI", "CATASTO", "AMMINISTRATIVA"}:
         raise ValueError(f"personnel_area mancante o non valida per {entity}")
     return str(value)
 

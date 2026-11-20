@@ -16,5 +16,7 @@ describe("Catasto team classification", () => {
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "CATASTO" } });
     expect(screen.getByRole("combobox")).toHaveValue("CATASTO");
     expect(screen.getByRole("status")).toHaveTextContent('"name":"Catasto","code":"CAT","personnelArea":"CATASTO"');
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "AMMINISTRATIVA" } });
+    expect(screen.getByRole("status")).toHaveTextContent('"personnelArea":"AMMINISTRATIVA"');
   });
 });

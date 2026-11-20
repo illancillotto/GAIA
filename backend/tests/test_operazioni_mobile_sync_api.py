@@ -149,16 +149,22 @@ def _seed_mobile_operator(db: Session) -> tuple[WCOperator, ApplicationUser]:
     return operator, gaia_user
 
 
-def test_gate_mobile_operator_push_payload_includes_console_permissions() -> None:
+@pytest.mark.parametrize(("area", "role"), [("AGRARIO", "console_admin"), ("AMMINISTRATIVA", "hr_manager")])
+def test_gate_mobile_operator_push_payload_includes_console_permissions(area: str, role: str) -> None:
     db = TestingSessionLocal()
-    _seed_mobile_operator(db)
+    operator, _ = _seed_mobile_operator(db)
+    operator.personnel_area = area
+    operator.gate_mobile_console_role = role
     db.commit()
 
     payload = gate_mobile_sync_service.build_mobile_operator_push_payload(db)
 
     assert payload["operators"][0]["gate_mobile_console_enabled"] is True
-    assert payload["operators"][0]["gate_mobile_console_role"] == "console_admin"
-    assert payload["operators"][0]["personnel_area"] == "AGRARIO"
+    assert payload["operators"][0]["gate_mobile_console_role"] == role
+    assert payload["operators"][0]["personnel_area"] == area
+    response = client.get("/api/mobile-sync/mobile-operators", headers=_connector_headers())
+    assert response.status_code == 200
+    assert response.json()["operators"] == payload["operators"]
     db.close()
 
 

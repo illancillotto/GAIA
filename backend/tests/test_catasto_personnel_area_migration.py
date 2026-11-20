@@ -3,22 +3,32 @@
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, inspect, text
-
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.util import load_python_file
+from sqlalchemy import create_engine, inspect, text
 
 
-def test_catasto_area_migration_preserves_existing_data_and_guards_downgrade():
+@pytest.mark.parametrize(
+    ("file", "new_area", "prior_areas"),
+    [
+        ("20261007_1800_catasto_personnel_area.py", "CATASTO", "'AGRARIO', 'IMPIANTI'"),
+        (
+            "20261120_1200_amministrativa_personnel_area.py",
+            "AMMINISTRATIVA",
+            "'AGRARIO', 'IMPIANTI', 'CATASTO'",
+        ),
+    ],
+)
+def test_area_migration_preserves_existing_data_and_guards_downgrade(file, new_area, prior_areas):
     migration = load_python_file(
         str(Path(__file__).parents[1] / "alembic/versions"),
-        "20261007_1800_catasto_personnel_area.py",
+        file,
     )
     engine = create_engine("sqlite://")
     with engine.begin() as conn:
         for table, constraint, nullable in migration.CONSTRAINTS:
-            condition = "personnel_area IN ('AGRARIO', 'IMPIANTI')"
+            condition = f"personnel_area IN ({prior_areas})"
             if nullable:
                 condition = "personnel_area IS NULL OR " + condition
             conn.execute(
@@ -35,14 +45,14 @@ def test_catasto_area_migration_preserves_existing_data_and_guards_downgrade():
                 conn.execute(text(f"SELECT personnel_area FROM {table} WHERE id=1")).scalar_one()
                 == "AGRARIO"
             )
-            conn.execute(text(f"INSERT INTO {table} VALUES (2, 'CATASTO')"))
-            assert "CATASTO" in inspect(conn).get_check_constraints(table)[0]["sqltext"]
+            conn.execute(text(f"INSERT INTO {table} VALUES (2, :area)"), {"area": new_area})
+            assert new_area in inspect(conn).get_check_constraints(table)[0]["sqltext"]
         with Operations.context(MigrationContext.configure(conn)):
-            with pytest.raises(RuntimeError, match="Reconcile Catasto"):
+            with pytest.raises(RuntimeError, match=f"Reconcile {new_area.title()}"):
                 migration.downgrade()
         for table, _, _ in migration.CONSTRAINTS:
             conn.execute(text(f"DELETE FROM {table} WHERE id=2"))
         with Operations.context(MigrationContext.configure(conn)):
             migration.downgrade()
         for table, _, _ in migration.CONSTRAINTS:
-            assert "CATASTO" not in inspect(conn).get_check_constraints(table)[0]["sqltext"]
+            assert new_area not in inspect(conn).get_check_constraints(table)[0]["sqltext"]

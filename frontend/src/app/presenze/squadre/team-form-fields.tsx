@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 export type TeamFormState = {
   name: string;
   code: string;
-  personnelArea: "AGRARIO" | "IMPIANTI" | "CATASTO";
+  personnelArea: "AGRARIO" | "IMPIANTI" | "CATASTO" | "AMMINISTRATIVA";
 };
 
 type TeamFormFieldsProps = {
@@ -44,7 +44,7 @@ export function TeamFormFields({ value, setValue }: TeamFormFieldsProps) {
             personnelArea: event.target.value as TeamFormState["personnelArea"],
           }))}
         >
-          {Object.entries({ AGRARIO: "Agrario", IMPIANTI: "Impianti", CATASTO: "Catasto" }).map(([area, label]) =>
+          {Object.entries({ AGRARIO: "Agrario", IMPIANTI: "Impianti", CATASTO: "Catasto", AMMINISTRATIVA: "Amministrativa" }).map(([area, label]) =>
             <option key={area} value={area}>{label}</option>)}
         </select>
       </label>

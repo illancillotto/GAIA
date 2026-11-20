@@ -79,7 +79,7 @@ def _manifest(*people: object, **person: object) -> dict[str, object]:
     return {"version": 1, "people": rows}
 
 
-@pytest.mark.parametrize("area", ["IMPIANTI", "CATASTO"])
+@pytest.mark.parametrize("area", ["IMPIANTI", "CATASTO", "AMMINISTRATIVA"])
 def test_manifest_backfill_is_atomic_audited_and_idempotent(area: str) -> None:
     db = _session()
     try:

@@ -70,7 +70,7 @@ Ordine dei criteri:
 
 Un candidato e revisionabile soltanto se il `gaia_user_id` non e gia associato
 ad altro collaboratore, esiste un solo `WCOperator` canonico e
-`personnel_area` vale `AGRARIO`, `IMPIANTI` o `CATASTO`. Il file di lavoro deve contenere
+`personnel_area` vale `AGRARIO`, `IMPIANTI`, `CATASTO` o `AMMINISTRATIVA`. Il file di lavoro deve contenere
 almeno:
 
 - `presenze_collaborator_id` e `candidate_gaia_user_id`;
@@ -214,7 +214,7 @@ deve provenire dall'attestazione esplicita e contiene soltanto i campi ammessi:
 }
 ```
 
-`personnel_area` ammette solo `AGRARIO`, `IMPIANTI` o `CATASTO`. Non aggiungere nome,
+`personnel_area` ammette solo `AGRARIO`, `IMPIANTI`, `CATASTO` o `AMMINISTRATIVA`. Non aggiungere nome,
 username, email, matricola o altri campi: il parser li rifiuta. Un manifest non
 deve contenere duplicati di `gaia_user_id` o `presenze_collaborator_id`.
 

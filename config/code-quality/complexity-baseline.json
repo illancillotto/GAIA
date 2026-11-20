@@ -59230,7 +59230,7 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "end_line": 343,
-      "fingerprint": "7741d3dc7cf49a36",
+      "fingerprint": "e8fcb028ed14734a",
       "kind": "function",
       "line": 340,
       "loc": 4,
@@ -59671,7 +59671,7 @@
       "cognitive": 1,
       "cyclomatic": 2,
       "end_line": 398,
-      "fingerprint": "f0c4e2da69b9e16c",
+      "fingerprint": "af438aaaee4f5252",
       "kind": "function",
       "line": 394,
       "loc": 5,
@@ -196245,7 +196245,7 @@
       "cognitive": 0,
       "cyclomatic": 1,
       "end_line": 53,
-      "fingerprint": "f81fe6b12ba350a3",
+      "fingerprint": "9d906a1731ad5d96",
       "kind": "react_component",
       "line": 14,
       "loc": 40,
@@ -362948,7 +362948,7 @@
       "cyclomatic_sum": 0,
       "dependency_count": 5,
       "imports": 5,
-      "loc": 51,
+      "loc": 52,
       "violations": []
     },
     "backend/app/modules/presenze/router/__init__.py": {
@@ -384529,10 +384529,10 @@
       "violations": []
     }
   },
-  "generated_at": "2026-11-19T12:11:33.921587+00:00",
+  "generated_at": "2026-11-20T11:40:59.253378+00:00",
   "provenance": {
-    "repo_root": "/home/cbo/CursorProjects/GAIA-release-preparation-20261118/implementation/swarm-control/combined",
-    "source_commit": "17d3b9af1cb412e30f9e48f2ccef6bce08354083",
+    "repo_root": "/home/cbo/CursorProjects/GAIA-area-amministrativa-20261120",
+    "source_commit": "9946ba25377d5f7a0241b0db19aeb796a9098aff",
     "tool": "tools/code_quality/complexity.py"
   },
   "schema_version": 2,
@@ -384562,5 +384562,5 @@
       "modules/elaborazioni/worker/**/*.py"
     ]
   },
-  "source_commit": "17d3b9af1cb412e30f9e48f2ccef6bce08354083"
+  "source_commit": "9946ba25377d5f7a0241b0db19aeb796a9098aff"
 }

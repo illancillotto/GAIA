@@ -101,7 +101,7 @@ class MobileOperatorResponseItem(BaseModel):
     display_name: str
     email: str
     phone: str | None
-    personnel_area: Literal["AGRARIO", "IMPIANTI", "CATASTO"]
+    personnel_area: Literal["AGRARIO", "IMPIANTI", "CATASTO", "AMMINISTRATIVA"]
     status: str
     domains: list[str] | None = None
     gate_mobile_console_enabled: bool
